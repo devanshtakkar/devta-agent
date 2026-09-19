@@ -4,9 +4,9 @@
     "shadcn": {
       "type": "local",
       "command": ["npx", "shadcn@latest", "mcp"],
-      "cwd": "d-frontend",
+      "cwd": "packages/frontend",
       "enabled": true
     }
   },
-  "instructions": ["d-frontend/AGENTS.md", "d-backend/AGENTS.md"]
+  "instructions": ["packages/frontend/AGENTS.md", "packages/backend/AGENTS.md"]
 }

@@ -1,0 +1,13 @@
+{
+  "name": "devta",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "packageManager": "pnpm@12.4.1",
+  "scripts": {
+    "dev:frontend": "pnpm --filter d-frontend dev",
+    "dev:backend": "pnpm --filter d-backend dev",
+    "build": "pnpm -r build",
+    "lint": "pnpm --filter d-frontend lint"
+  }
+}

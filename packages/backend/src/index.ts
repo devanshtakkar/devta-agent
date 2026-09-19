@@ -1,0 +1,53 @@
+import express, { type Express } from "express";
+import cors from "cors";
+import os from "node:os";
+import { authHandler } from "./auth.js";
+import { env } from "./env.js";
+import { connectDb } from "./db.js";
+import { seedDefaults } from "./services/config.js";
+import coachRouter from "./routes/coach.js";
+import configRouter from "./routes/config.js";
+
+const app: Express = express();
+
+app.use(cors({ origin: env.FRONTEND_URL, credentials: true }));
+app.use(express.json({ limit: "10mb" }));
+
+app.get("/health", (_req, res) => {
+  res.json({ ok: true });
+});
+
+// Better-Auth handler (must be mounted before JSON-consuming routers only
+// for its own path; express.json() above is fine since the handler reads
+// the raw Node request itself).
+app.all("/api/auth/*", authHandler);
+
+app.use("/api/coach", coachRouter);
+app.use("/api/config", configRouter);
+
+async function main() {
+  await connectDb();
+  await seedDefaults();
+  app.listen(env.PORT, () => {
+    console.log(`d-backend listening on http://localhost:${env.PORT}`);
+    const lanIp = getLanIp();
+    if (lanIp) console.log(`d-backend on LAN: http://${lanIp}:${env.PORT}`);
+  });
+}
+
+function getLanIp(): string | undefined {
+  const nets = os.networkInterfaces();
+  for (const addrs of Object.values(nets)) {
+    for (const a of addrs ?? []) {
+      if (a.family === "IPv4" && !a.internal) return a.address;
+    }
+  }
+  return undefined;
+}
+
+main().catch((err) => {
+  console.error("Failed to start server:", err);
+  process.exit(1);
+});
+
+export default app;

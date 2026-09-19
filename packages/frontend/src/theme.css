@@ -1,0 +1,28 @@
+/* App-specific theme overrides (manual light/dark choice).
+   Keep shadcn-managed `index.css` untouched — put custom CSS here and import
+   it in `main.tsx` AFTER `index.css` so it wins on equal specificity. */
+
+/* Explicit light override — must cascade after the `prefers-color-scheme`
+   media block in `index.css` so a manual "light" choice wins over a dark
+   OS setting. Values mirror the `:root` light tokens in `index.css`. */
+.light {
+  color-scheme: light;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0.008 326);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0.008 326);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0.008 326);
+  --primary: oklch(0.518 0.253 323.949);
+  --primary-foreground: oklch(0.977 0.017 320.058);
+  --secondary: oklch(0.967 0.001 286.375);
+  --secondary-foreground: oklch(0.21 0.006 285.885);
+  --muted: oklch(0.96 0.003 325.6);
+  --muted-foreground: oklch(0.542 0.034 322.5);
+  --accent: oklch(0.518 0.253 323.949);
+  --accent-foreground: oklch(0.977 0.017 320.058);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0.005 325.62);
+  --input: oklch(0.922 0.005 325.62);
+  --ring: oklch(0.711 0.019 323.02);
+}
