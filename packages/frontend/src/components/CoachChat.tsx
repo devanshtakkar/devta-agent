@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckIcon, ImagePlusIcon, SendIcon, SparklesIcon, TriangleAlertIcon, XIcon } from "lucide-react";
+import { CheckIcon, SendIcon, SparklesIcon, TriangleAlertIcon, XIcon } from "lucide-react";
 import {
   createSession,
   fileToDataUrl,
@@ -15,6 +15,7 @@ import {
   type Starter,
 } from "@/lib/api";
 import { StarterCarousel } from "@/components/StarterCarousel";
+import { ComposerMenu } from "@/components/ComposerMenu";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Attachment,
@@ -276,7 +277,6 @@ export function CoachChat({ sessionId }: { sessionId: string | null }) {
                     )}
                     {t.ideas && (
                       <Message align="start">
-                        <AiAvatar />
                         <MessageContent>
                           <Bubble variant="muted" align="start">
                             <BubbleContent>{t.ideas.overview}</BubbleContent>
@@ -345,20 +345,22 @@ export function CoachChat({ sessionId }: { sessionId: string | null }) {
 
         {/* composer */}
         <div className="border-border bg-background w-full shrink-0 border-t p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-          <div className="mb-2 flex gap-1.5 overflow-x-auto">
-            {QUICK.map((q) => (
-              <Button
-                key={q}
-                type="button"
-                size="sm"
-                variant="outline"
-                className="shrink-0 rounded-full"
-                onClick={() => submit(`I'm in a ${q.toLowerCase()}. There's a girl nearby I'd like to talk to politely. Quick context: `)}
-              >
-                {q}
-              </Button>
-            ))}
-          </div>
+          {turns.length === 0 && (
+            <div className="mb-2 flex gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              {QUICK.map((q) => (
+                <Button
+                  key={q}
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="shrink-0 rounded-full"
+                  onClick={() => submit(`I'm in a ${q.toLowerCase()}. There's a girl nearby I'd like to talk to politely. Quick context: `)}
+                >
+                  {q}
+                </Button>
+              ))}
+            </div>
+          )}
           {imageDataUrl && (
             <Attachment state="done" size="sm" className="mb-2">
               <AttachmentMedia variant="image">
@@ -382,6 +384,9 @@ export function CoachChat({ sessionId }: { sessionId: string | null }) {
             onChange={(e) => void onPickImage(e.target.files?.[0])}
           />
           <InputGroup>
+            <InputGroupAddon align="inline-start" className="py-0 pl-2">
+              <ComposerMenu onAddImage={() => fileRef.current?.click()} />
+            </InputGroupAddon>
             <InputGroupTextarea
               value={situation}
               onChange={(e) => setSituation(e.target.value)}
@@ -391,33 +396,23 @@ export function CoachChat({ sessionId }: { sessionId: string | null }) {
                   void submit();
                 }
               }}
-              rows={2}
+              rows={1}
               enterKeyHint="send"
-              placeholder="e.g. Cafe, she's reading alone by the window…"
+              placeholder="Describe the scene…"
               aria-label="Describe the situation"
-              // Inline style wins over the registry's `field-sizing-content`
-              // class (same-specificity utilities resolve by stylesheet order,
-              // so a class override isn't deterministic). Fixed rows keep the
-              // composer compact like before.
-              style={{ fieldSizing: "fixed" }}
-              className="max-h-28 min-h-11 pl-3 text-[16px]"
+              // `field-sizing: content` (inline so it beats the stylesheet's
+              // `field-sizing-content` ordering) keeps the composer one line by
+              // default and grows it as the text wraps, up to `max-h`.
+              style={{ fieldSizing: "content" }}
+              className="max-h-32 min-h-10 overflow-y-auto px-2 py-2 text-[16px]"
             />
-            <InputGroupAddon align="block-end">
-              <InputGroupButton
-                type="button"
-                size="icon-sm"
-                aria-label="Add photo for context"
-                onClick={() => fileRef.current?.click()}
-              >
-                <ImagePlusIcon />
-              </InputGroupButton>
+            <InputGroupAddon align="inline-end" className="py-0 pr-2">
               <InputGroupButton
                 type="button"
                 variant="default"
                 size="icon-sm"
                 aria-label="Get ideas"
                 disabled={!situation.trim() || loading}
-                className="ml-auto"
                 onClick={() => void submit()}
               >
                 <SendIcon />
