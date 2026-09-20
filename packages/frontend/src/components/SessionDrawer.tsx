@@ -196,7 +196,7 @@ export function SessionDrawer({
                     key={s.uuid}
                     className={`border-border/50 border-b border-l-[3px] transition-colors ${
                       isActive
-                        ? "border-l-primary bg-accent"
+                        ? "border-l-primary bg-primary/10"
                         : isMenuOpen
                           ? "border-l-transparent bg-muted/50"
                           : "border-l-transparent"
