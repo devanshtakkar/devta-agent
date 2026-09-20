@@ -5,7 +5,33 @@
 /* Explicit light override — must cascade after the `prefers-color-scheme`
    media block in `index.css` so a manual "light" choice wins over a dark
    OS setting. Values mirror the `:root` light tokens in `index.css`. */
+/* Brand font for the "devta" wordmark (Cherry Bomb One via Google Fonts,
+   loaded in index.html; falls back gracefully when offline). */
+.font-logo {
+  font-family: "Cherry Bomb One", "Geist Variable", system-ui, cursive;
+  font-weight: 400;
+  letter-spacing: 0.01em;
+}
+
+/* Tailwind v4 puts utilities in `@layer utilities`, and unlayered author CSS
+   (like the global `h1` rule in index.css) beats layered CSS regardless of
+   specificity — so size utilities lose on headings. Set it here instead. */
+h1.font-logo {
+  font-size: 2.75rem;
+  line-height: 1;
+}
+
+/* Manual theme choice must also drive `--text-h` (used by the global h1/h2
+   rule in shadcn-managed index.css). index.css only updates it under
+   `prefers-color-scheme`, so headings ignored the in-app toggle whenever it
+   disagreed with the OS setting. These rules load after index.css, so they
+   win ties at equal specificity. */
+.dark {
+  --text-h: #f3f4f6;
+}
+
 .light {
+  --text-h: #08060d;
   color-scheme: light;
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0.008 326);
@@ -47,4 +73,19 @@ body {
 #root {
   height: 100dvh;
   overflow: hidden;
+}
+
+/* Splash screen logo entrance. */
+@keyframes splash-pop {
+  from {
+    transform: scale(0.8);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+.splash-logo {
+  animation: splash-pop 0.5s ease-out both;
 }

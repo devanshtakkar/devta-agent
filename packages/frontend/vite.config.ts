@@ -15,11 +15,11 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'favicon-32x32.png', 'favicon-16x16.png', 'apple-touch-icon.png'],
       manifest: {
-        name: 'd-frontend',
-        short_name: 'd-frontend',
-        description: 'd-frontend web app',
+        name: 'devta',
+        short_name: 'devta',
+        description: 'devta — your in-the-moment wingman',
         theme_color: '#16171d',
-        background_color: '#ffffff',
+        background_color: '#16171d',
         display: 'standalone',
         start_url: '/',
         icons: [

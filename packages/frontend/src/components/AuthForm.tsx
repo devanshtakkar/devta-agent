@@ -27,7 +27,7 @@ export function AuthForm() {
   return (
     <div className="mx-auto flex min-h-0 w-full max-w-sm flex-1 flex-col justify-center gap-5 overflow-y-auto overscroll-contain px-5 py-10">
       <div>
-        <h1 className="text-3xl font-semibold tracking-tight">Devta</h1>
+        <h1 className="font-logo text-5xl leading-none font-normal">devta</h1>
         <p className="text-muted-foreground mt-1 text-sm">
           Your in-the-moment wingman. Sign in to get openers in seconds.
         </p>
