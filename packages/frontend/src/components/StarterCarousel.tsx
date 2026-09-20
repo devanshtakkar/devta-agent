@@ -2,12 +2,10 @@ import { useState } from "react";
 import { CheckIcon, GitBranchIcon, TriangleAlertIcon } from "lucide-react";
 import { fetchBranch, type BranchResponse, type Starter } from "@/lib/api";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
 import { Bubble, BubbleContent } from "@/components/ui/bubble";
 import { Button } from "@/components/ui/button";
 import {
   Card,
-  CardAction,
   CardContent,
   CardDescription,
   CardFooter,
@@ -25,12 +23,6 @@ import {
   DrawerTitle,
 } from "@/components/ui/drawer";
 import { Skeleton } from "@/components/ui/skeleton";
-
-const RISK_VARIANT: Record<Starter["risk"], "secondary" | "outline" | "destructive"> = {
-  low: "secondary",
-  medium: "outline",
-  high: "destructive",
-};
 
 export function StarterCarousel({
   situation,
@@ -74,9 +66,6 @@ export function StarterCarousel({
                   <CardDescription>
                     Option {i + 1} of {starters.length}
                   </CardDescription>
-                  <CardAction>
-                    <Badge variant={RISK_VARIANT[s.risk]}>{s.risk} key</Badge>
-                  </CardAction>
                   <CardTitle>{s.title}</CardTitle>
                 </CardHeader>
                 <CardContent className="flex flex-col gap-2">

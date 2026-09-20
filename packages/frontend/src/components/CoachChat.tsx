@@ -22,7 +22,7 @@ import {
   InputGroupTextarea,
 } from "@/components/ui/input-group";
 import { Marker, MarkerContent, MarkerIcon } from "@/components/ui/marker";
-import { Message, MessageAvatar, MessageContent } from "@/components/ui/message";
+import { Message, MessageAvatar, MessageContent, MessageGroup } from "@/components/ui/message";
 import {
   MessageScroller,
   MessageScrollerButton,
@@ -116,47 +116,49 @@ export function CoachChat() {
               )}
               {turns.map((t) => (
                 <MessageScrollerItem key={t.id} messageId={String(t.id)} scrollAnchor>
-                  <Message align="end">
-                    <MessageContent>
-                      <Bubble variant="default" align="end">
-                        <BubbleContent>{t.situation}</BubbleContent>
-                      </Bubble>
-                      {t.imagePreview && (
-                        <Attachment state="done" size="sm">
-                          <AttachmentMedia variant="image">
-                            <img src={t.imagePreview} alt="scene context" />
-                          </AttachmentMedia>
-                          <AttachmentContent>
-                            <AttachmentTitle>Scene photo</AttachmentTitle>
-                          </AttachmentContent>
-                        </Attachment>
-                      )}
-                    </MessageContent>
-                  </Message>
-                  {t.error && (
-                    <Alert variant="destructive">
-                      <TriangleAlertIcon />
-                      <AlertDescription>{t.error}</AlertDescription>
-                    </Alert>
-                  )}
-                  {t.ideas && (
-                    <Message align="start">
-                      <AiAvatar />
+                  <MessageGroup className="gap-3">
+                    <Message align="end">
                       <MessageContent>
-                        <Bubble variant="muted" align="start">
-                          <BubbleContent>{t.ideas.overview}</BubbleContent>
+                        <Bubble variant="default" align="end">
+                          <BubbleContent>{t.situation}</BubbleContent>
                         </Bubble>
-                        <StarterCarousel
-                          situation={t.situation}
-                          starters={t.ideas.starters}
-                          onUse={(s) => {
-                            setUsed(s);
-                            void navigator.clipboard?.writeText(s.openerLine).catch(() => {});
-                          }}
-                        />
+                        {t.imagePreview && (
+                          <Attachment state="done" size="sm">
+                            <AttachmentMedia variant="image">
+                              <img src={t.imagePreview} alt="scene context" />
+                            </AttachmentMedia>
+                            <AttachmentContent>
+                              <AttachmentTitle>Scene photo</AttachmentTitle>
+                            </AttachmentContent>
+                          </Attachment>
+                        )}
                       </MessageContent>
                     </Message>
-                  )}
+                    {t.error && (
+                      <Alert variant="destructive">
+                        <TriangleAlertIcon />
+                        <AlertDescription>{t.error}</AlertDescription>
+                      </Alert>
+                    )}
+                    {t.ideas && (
+                      <Message align="start">
+                        <AiAvatar />
+                        <MessageContent>
+                          <Bubble variant="muted" align="start">
+                            <BubbleContent>{t.ideas.overview}</BubbleContent>
+                          </Bubble>
+                          <StarterCarousel
+                            situation={t.situation}
+                            starters={t.ideas.starters}
+                            onUse={(s) => {
+                              setUsed(s);
+                              void navigator.clipboard?.writeText(s.openerLine).catch(() => {});
+                            }}
+                          />
+                        </MessageContent>
+                      </Message>
+                    )}
+                  </MessageGroup>
                 </MessageScrollerItem>
               ))}
               {loading && (
