@@ -1,19 +1,11 @@
-import { useState } from "react";
-import {
-  Link,
-  useNavigate,
-  useRouterState,
-} from "@tanstack/react-router";
-import {
-  useMutation,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
+import { useState, type CSSProperties } from "react";
+import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   CheckIcon,
+  EllipsisVerticalIcon,
   MessageSquareIcon,
   MessageSquarePlusIcon,
-  PencilIcon,
   Trash2Icon,
   XIcon,
 } from "lucide-react";
@@ -23,13 +15,13 @@ import {
   listSessions,
   renameSession,
   sessionsKeys,
+  type SessionListItem,
 } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import {
   Drawer,
   DrawerContent,
   DrawerDescription,
-  DrawerHeader,
   DrawerTitle,
 } from "@/components/ui/drawer";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -58,6 +50,7 @@ export function SessionDrawer({
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const activeUuid = pathname.startsWith("/s/") ? pathname.slice(3) : null;
   const [editingUuid, setEditingUuid] = useState<string | null>(null);
+  const [menuUuid, setMenuUuid] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
@@ -68,6 +61,13 @@ export function SessionDrawer({
     staleTime: 30_000,
   });
 
+  function close() {
+    setMenuUuid(null);
+    setEditingUuid(null);
+    setConfirmDelete(null);
+    onOpenChange(false);
+  }
+
   const invalidateList = () =>
     void queryClient.invalidateQueries({ queryKey: sessionsKeys.all });
 
@@ -75,7 +75,7 @@ export function SessionDrawer({
     mutationFn: createSession,
     onSuccess: (s) => {
       invalidateList();
-      onOpenChange(false);
+      close();
       void navigate({ to: "/s/$sessionId", params: { sessionId: s.uuid } });
     },
   });
@@ -85,7 +85,7 @@ export function SessionDrawer({
       renameSession(uuid, title),
     onSuccess: (_data, vars) => {
       setEditingUuid(null);
-      void queryClient.invalidateQueries({ queryKey: sessionsKeys.all });
+      invalidateList();
       void queryClient.invalidateQueries({
         queryKey: sessionsKeys.detail(vars.uuid),
       });
@@ -96,11 +96,19 @@ export function SessionDrawer({
     mutationFn: deleteSession,
     onSuccess: (_data, uuid) => {
       setConfirmDelete(null);
-      void queryClient.invalidateQueries({ queryKey: sessionsKeys.all });
+      setMenuUuid(null);
+      invalidateList();
       void queryClient.removeQueries({ queryKey: sessionsKeys.detail(uuid) });
       if (activeUuid === uuid) void navigate({ to: "/" });
     },
   });
+
+  function startRename(s: SessionListItem) {
+    setMenuUuid(null);
+    setConfirmDelete(null);
+    setEditingUuid(s.uuid);
+    setDraft(s.title === "New chat" ? "" : s.title);
+  }
 
   function submitRename(uuid: string) {
     const title = draft.trim();
@@ -109,161 +117,210 @@ export function SessionDrawer({
   }
 
   return (
-    <Drawer
-      open={open}
-      onOpenChange={onOpenChange}
-      swipeDirection="left"
-    >
-      <DrawerContent className="max-w-xs">
-        <DrawerHeader className="text-left">
-          <DrawerTitle>Chats</DrawerTitle>
-          <DrawerDescription>
-            Previous wingman sessions, newest first.
+    <Drawer open={open} onOpenChange={(o) => (o ? onOpenChange(true) : close())} swipeDirection="left">
+      <DrawerContent
+        // Full-bleed panel: override the registry default inset, width and
+        // rounding (inline style so it beats the stylesheet-declared vars).
+        style={
+          {
+            "--drawer-inset": "0px",
+            "--drawer-content-width": "100%",
+            "--drawer-content-height": "100dvh",
+            borderRadius: 0,
+            borderWidth: 0,
+          } as CSSProperties
+        }
+        className="w-full max-w-none p-0"
+      >
+        <div className="flex h-full min-h-0 flex-col bg-popover">
+          <header className="flex items-center justify-between gap-3 px-5 pt-[max(1.25rem,env(safe-area-inset-top))] pb-3">
+            <DrawerTitle className="font-heading text-2xl font-semibold tracking-tight">
+              Recents
+            </DrawerTitle>
+            <Button
+              size="icon"
+              variant="ghost"
+              aria-label="Close recents"
+              onClick={close}
+            >
+              <XIcon />
+            </Button>
+          </header>
+          <DrawerDescription className="sr-only">
+            Your previous coaching chats, newest first.
           </DrawerDescription>
-        </DrawerHeader>
-        <div className="px-4 pb-2">
-          <Button
-            className="w-full"
-            onClick={() => createMutation.mutate()}
-            disabled={createMutation.isPending}
-          >
-            <MessageSquarePlusIcon data-icon="inline-start" />
-            New chat
-          </Button>
-          {createMutation.isError && (
-            <p className="text-destructive mt-2 text-xs">
-              Couldn't create a chat — try again.
-            </p>
-          )}
-        </div>
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-6">
-          {listQuery.isPending && (
-            <div className="flex flex-col gap-2 p-2" aria-label="Loading chats">
-              <Skeleton className="h-14 w-full" />
-              <Skeleton className="h-14 w-full" />
-              <Skeleton className="h-14 w-full" />
-            </div>
-          )}
-          {listQuery.isError && (
-            <p className="text-muted-foreground px-4 py-6 text-center text-sm">
-              Couldn't load chats. Close and retry.
-            </p>
-          )}
-          {listQuery.data?.length === 0 && (
-            <p className="text-muted-foreground px-4 py-6 text-center text-sm">
-              No chats yet — start a new one.
-            </p>
-          )}
-          <ul className="flex flex-col gap-1">
-            {listQuery.data?.map((s) => {
-              const isActive = s.uuid === activeUuid;
-              const isEditing = editingUuid === s.uuid;
-              const isConfirming = confirmDelete === s.uuid;
-              return (
-                <li
-                  key={s.uuid}
-                  className={`rounded-xl ${isActive ? "bg-accent" : ""}`}
-                >
-                  {isEditing ? (
-                    <div className="flex items-center gap-1 p-2">
-                      <input
-                        // eslint-disable-next-line jsx-a11y/no-autofocus -- explicit user action
-                        autoFocus
-                        value={draft}
-                        maxLength={80}
-                        onChange={(e) => setDraft(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") submitRename(s.uuid);
-                          if (e.key === "Escape") setEditingUuid(null);
-                        }}
-                        aria-label="Chat title"
-                        className="bg-background border-input min-w-0 flex-1 rounded-md border px-2 py-1.5 text-sm"
-                      />
-                      <Button
-                        size="icon-sm"
-                        variant="ghost"
-                        aria-label="Save title"
-                        disabled={
-                          !draft.trim() || renameMutation.isPending
-                        }
-                        onClick={() => submitRename(s.uuid)}
-                      >
-                        <CheckIcon />
-                      </Button>
-                      <Button
-                        size="icon-sm"
-                        variant="ghost"
-                        aria-label="Cancel rename"
-                        onClick={() => setEditingUuid(null)}
-                      >
-                        <XIcon />
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-1 p-1">
-                      <Link
-                        to="/s/$sessionId"
-                        params={{ sessionId: s.uuid }}
-                        onClick={() => onOpenChange(false)}
-                        className="min-w-0 flex-1 rounded-lg px-2 py-1.5 text-left"
-                      >
-                        <span className="flex items-center gap-2">
-                          <MessageSquareIcon className="size-4 shrink-0 opacity-60" />
-                          <span className="truncate text-sm font-medium">
-                            {s.title}
-                          </span>
-                        </span>
-                        <span className="text-muted-foreground mt-0.5 block truncate pl-6 text-xs">
-                          {s.turnCount === 0
-                            ? "Empty chat"
-                            : `${s.turnCount} turn${s.turnCount === 1 ? "" : "s"} · ${timeAgo(s.updatedAt)}`}
-                        </span>
-                      </Link>
-                      <Button
-                        size="icon-sm"
-                        variant="ghost"
-                        aria-label={`Rename ${s.title}`}
-                        onClick={() => {
-                          setConfirmDelete(null);
-                          setEditingUuid(s.uuid);
-                          setDraft(s.title === "New chat" ? "" : s.title);
-                        }}
-                      >
-                        <PencilIcon />
-                      </Button>
-                      {isConfirming ? (
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          disabled={deleteMutation.isPending}
-                          onClick={() => deleteMutation.mutate(s.uuid)}
-                        >
-                          Delete?
-                        </Button>
-                      ) : (
+
+          <div className="px-5 pb-3">
+            <Button
+              className="h-11 w-full text-[15px]"
+              onClick={() => createMutation.mutate()}
+              disabled={createMutation.isPending}
+            >
+              <MessageSquarePlusIcon data-icon="inline-start" />
+              New chat
+            </Button>
+            {createMutation.isError && (
+              <p className="text-destructive mt-2 text-xs">
+                Couldn&apos;t create a chat — try again.
+              </p>
+            )}
+          </div>
+
+          <div className="border-border/60 min-h-0 flex-1 overflow-y-auto overscroll-contain border-t">
+            {listQuery.isPending && (
+              <div className="flex flex-col gap-1 p-4" aria-label="Loading recents">
+                <Skeleton className="h-16 w-full" />
+                <Skeleton className="h-16 w-full" />
+                <Skeleton className="h-16 w-full" />
+              </div>
+            )}
+            {listQuery.isError && (
+              <p className="text-muted-foreground px-5 py-10 text-center text-sm">
+                Couldn&apos;t load recents. Close and retry.
+              </p>
+            )}
+            {listQuery.data?.length === 0 && (
+              <p className="text-muted-foreground px-5 py-10 text-center text-sm">
+                No chats yet — start a new one.
+              </p>
+            )}
+
+            <ul>
+              {listQuery.data?.map((s) => {
+                const isActive = s.uuid === activeUuid;
+                const isEditing = editingUuid === s.uuid;
+                const isMenuOpen = menuUuid === s.uuid;
+                const isConfirming = confirmDelete === s.uuid;
+                return (
+                  <li
+                    key={s.uuid}
+                    className={`border-border/50 border-b border-l-[3px] transition-colors ${
+                      isActive
+                        ? "border-l-primary bg-accent"
+                        : isMenuOpen
+                          ? "border-l-transparent bg-muted/50"
+                          : "border-l-transparent"
+                    }`}
+                  >
+                    {isEditing ? (
+                      <div className="flex items-center gap-2 px-4 py-3">
+                        <input
+                          // eslint-disable-next-line jsx-a11y/no-autofocus -- explicit user action
+                          autoFocus
+                          value={draft}
+                          maxLength={80}
+                          onChange={(e) => setDraft(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") submitRename(s.uuid);
+                            if (e.key === "Escape") setEditingUuid(null);
+                          }}
+                          aria-label="Chat title"
+                          className="bg-background border-input min-w-0 flex-1 rounded-md border px-2.5 py-2 text-sm"
+                        />
                         <Button
                           size="icon-sm"
                           variant="ghost"
-                          aria-label={`Delete ${s.title}`}
-                          onClick={() => {
-                            setEditingUuid(null);
-                            setConfirmDelete(s.uuid);
-                            window.setTimeout(() => {
-                              setConfirmDelete((cur) =>
-                                cur === s.uuid ? null : cur,
-                              );
-                            }, 4000);
-                          }}
+                          aria-label="Save title"
+                          disabled={!draft.trim() || renameMutation.isPending}
+                          onClick={() => submitRename(s.uuid)}
                         >
-                          <Trash2Icon />
+                          <CheckIcon />
                         </Button>
-                      )}
-                    </div>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
+                        <Button
+                          size="icon-sm"
+                          variant="ghost"
+                          aria-label="Cancel rename"
+                          onClick={() => setEditingUuid(null)}
+                        >
+                          <XIcon />
+                        </Button>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="flex items-stretch">
+                          <Link
+                            to="/s/$sessionId"
+                            params={{ sessionId: s.uuid }}
+                            onClick={close}
+                            className="flex min-w-0 flex-1 items-center gap-3 px-4 py-3"
+                          >
+                            <MessageSquareIcon className="text-muted-foreground size-5 shrink-0" />
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-[15px] font-medium">
+                                {s.title}
+                              </span>
+                              <span className="text-muted-foreground mt-0.5 block truncate text-xs">
+                                {s.turnCount === 0
+                                  ? "No messages yet"
+                                  : s.preview || `${s.turnCount} turns`}
+                                {" · "}
+                                {timeAgo(s.updatedAt)}
+                              </span>
+                            </span>
+                          </Link>
+                          <div className="flex items-center pr-2">
+                            <Button
+                              size="icon-sm"
+                              variant="ghost"
+                              aria-label={`Actions for ${s.title}`}
+                              aria-expanded={isMenuOpen}
+                              onClick={() => {
+                                setConfirmDelete(null);
+                                setMenuUuid(isMenuOpen ? null : s.uuid);
+                              }}
+                            >
+                              <EllipsisVerticalIcon />
+                            </Button>
+                          </div>
+                        </div>
+
+                        {isMenuOpen && (
+                          <div className="flex flex-wrap items-center gap-2 px-4 pb-3">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => startRename(s)}
+                            >
+                              Rename
+                            </Button>
+                            {isConfirming ? (
+                              <>
+                                <Button
+                                  size="sm"
+                                  variant="destructive"
+                                  disabled={deleteMutation.isPending}
+                                  onClick={() => deleteMutation.mutate(s.uuid)}
+                                >
+                                  Delete
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => setConfirmDelete(null)}
+                                >
+                                  Cancel
+                                </Button>
+                              </>
+                            ) : (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                onClick={() => setConfirmDelete(s.uuid)}
+                              >
+                                <Trash2Icon data-icon="inline-start" />
+                                Delete
+                              </Button>
+                            )}
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
         </div>
       </DrawerContent>
     </Drawer>
