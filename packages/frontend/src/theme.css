@@ -91,9 +91,10 @@ body {
 }
 
 /* Chat left-alignment — legacy `#root { text-align: center }` in
-   shadcn-managed `index.css` is inherited by bubbles and cards (neither
-   sets its own alignment). `#root` prefix beats the ID selector;
+   shadcn-managed `index.css` is inherited by message content, bubbles and
+   cards (none sets its own alignment). `#root` prefix beats the ID selector;
    `index.css` stays untouched. */
+#root [data-slot="message-content"],
 #root [data-slot="bubble-content"],
 #root [data-slot="card"] {
   text-align: left;

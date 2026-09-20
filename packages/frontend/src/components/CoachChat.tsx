@@ -35,7 +35,6 @@ import {
   AttachmentMedia,
   AttachmentTitle,
 } from "@/components/ui/attachment";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Bubble, BubbleContent } from "@/components/ui/bubble";
 import { Button } from "@/components/ui/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
@@ -45,7 +44,7 @@ import {
   InputGroupButton,
   InputGroupTextarea,
 } from "@/components/ui/input-group";
-import { Message, MessageAvatar, MessageContent, MessageGroup } from "@/components/ui/message";
+import { Message, MessageContent, MessageGroup } from "@/components/ui/message";
 import {
   MessageScroller,
   MessageScrollerButton,
@@ -60,17 +59,6 @@ const QUICK = ["Cafe", "Restaurant", "Street", "Party", "Campus"];
 
 const APPROACH_PROMPT =
   "Give me 5 concrete approaches for what to do right now, based on our conversation.";
-
-function AiAvatar() {
-  return (
-    <MessageAvatar>
-      <Avatar size="sm">
-        <AvatarImage src="/apple-touch-icon.png" alt="devta" />
-        <AvatarFallback>d</AvatarFallback>
-      </Avatar>
-    </MessageAvatar>
-  );
-}
 
 function imagePart(dataUrl: string): FileUIPart {
   return { type: "file", mediaType: "image/jpeg", url: dataUrl, filename: "scene.jpg" };
@@ -136,11 +124,9 @@ function AssistantParts({
         <ApproachOptions key={tool.toolCallId} part={tool} onUse={onUse} />
       ))}
       {text.trim() && (
-        <Bubble variant="muted" align="start">
-          <BubbleContent>
-            <Response>{text}</Response>
-          </BubbleContent>
-        </Bubble>
+        <div className="w-full min-w-0">
+          <Response>{text}</Response>
+        </div>
       )}
     </>
   );
@@ -327,7 +313,6 @@ export function CoachChat({ sessionId }: { sessionId: string | null }) {
                 >
                   <MessageGroup className="gap-3">
                     <Message align={m.role === "user" ? "end" : "start"}>
-                      {m.role === "assistant" && <AiAvatar />}
                       <MessageContent>
                         {m.role === "user" ? (
                           <UserParts message={m} />
@@ -343,9 +328,8 @@ export function CoachChat({ sessionId }: { sessionId: string | null }) {
               {showWorking && (
                 <MessageScrollerItem messageId="working">
                   <Message align="start">
-                    <AiAvatar />
                     <MessageContent>
-                      <p className="text-muted-foreground flex items-center gap-2 px-3.5 text-sm">
+                      <p className="text-muted-foreground flex items-center gap-2 text-sm">
                         <Spinner /> {messages.length === 0 ? "Composing…" : "Thinking…"}
                       </p>
                     </MessageContent>

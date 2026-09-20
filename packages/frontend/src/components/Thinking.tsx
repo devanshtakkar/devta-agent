@@ -33,7 +33,7 @@ export function Thinking({ text, streaming }: { text: string; streaming: boolean
         />
       </button>
       {(open || streaming) && (
-        <div className="border-border/60 bg-muted/40 mt-1.5 rounded-xl border px-3 py-2 text-xs leading-relaxed wrap-break-word whitespace-pre-wrap">
+        <div className="mt-1.5 text-xs leading-relaxed wrap-break-word whitespace-pre-wrap">
           {text || "…"}
         </div>
       )}

@@ -1,7 +1,6 @@
 import { CheckIcon, TriangleAlertIcon } from "lucide-react";
 import type { ApproachToolPart, Starter } from "@/lib/api";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Bubble, BubbleContent } from "@/components/ui/bubble";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -67,9 +66,7 @@ export function ApproachOptions({
   return (
     <div className="flex min-w-0 flex-col gap-2.5">
       {overview && (
-        <Bubble variant="muted" align="start">
-          <BubbleContent>{overview}</BubbleContent>
-        </Bubble>
+        <p className="text-muted-foreground text-sm leading-snug">{overview}</p>
       )}
       <Carousel className="-mx-4 px-4">
         <CarouselContent className="-ml-3">
@@ -82,12 +79,14 @@ export function ApproachOptions({
                   </CardDescription>
                   <CardTitle>{s.title}</CardTitle>
                 </CardHeader>
-                <CardContent className="flex flex-col gap-2">
-                  <Bubble variant="muted" align="start">
-                    <BubbleContent>“{s.openerLine}”</BubbleContent>
-                  </Bubble>
+                <CardContent className="flex flex-col gap-3">
+                  <div className="border-border/60 bg-muted/50 rounded-xl border px-3.5 py-2.5">
+                    <p className="text-[15px] leading-snug font-medium">
+                      “{s.openerLine}”
+                    </p>
+                  </div>
                   <p className="text-muted-foreground text-[13px] leading-snug">{s.why}</p>
-                  <p className="text-[13px]">
+                  <p className="text-[13px] leading-snug">
                     <span className="font-semibold">Next: </span>
                     {s.nextMove}
                   </p>
