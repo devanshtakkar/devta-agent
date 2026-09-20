@@ -64,6 +64,7 @@ export interface SessionListItem {
 export interface ChatSessionDetail {
   uuid: string;
   title: string;
+  connectionId?: string;
   createdAt: string;
   updatedAt: string;
   messages: ChatMessage[];
@@ -74,6 +75,185 @@ export const sessionsKeys = {
   list: ["sessions", "list"] as const,
   detail: (uuid: string) => ["sessions", "detail", uuid] as const,
 };
+
+/* -------------------------------------------------------------------------- */
+/*                             Connections tracker                            */
+/* -------------------------------------------------------------------------- */
+
+export const CONNECTION_STAGES = [
+  "approached",
+  "talking",
+  "contact",
+  "dating",
+  "intimate",
+  "relationship",
+  "engaged",
+  "married",
+] as const;
+
+export const CONNECTION_TERMINAL = ["failed", "ghosted"] as const;
+
+export type ConnectionStage = (typeof CONNECTION_STAGES)[number];
+export type ConnectionTerminal = (typeof CONNECTION_TERMINAL)[number];
+export type ConnectionStatus = ConnectionStage | ConnectionTerminal;
+
+export const EVENT_TYPES = [
+  "approach",
+  "reply",
+  "number",
+  "date_planned",
+  "date_done",
+  "intimate",
+  "stage_change",
+  "failure",
+  "note",
+] as const;
+
+export type ConnectionEventType = (typeof EVENT_TYPES)[number];
+
+export interface ConnectionEvent {
+  id: string;
+  type: ConnectionEventType;
+  title: string;
+  details: string;
+  occurredAt: string;
+  location?: string;
+  stage?: ConnectionStatus;
+  sessionId?: string;
+}
+
+export interface Connection {
+  uuid: string;
+  name: string;
+  metLocation: string;
+  metAt?: string;
+  metContext: string;
+  approachOpener: string;
+  approachRisk?: "low" | "medium" | "high";
+  stage: ConnectionStatus;
+  milestones: string[];
+  nextMove: string;
+  closedReason: string;
+  notes: string;
+  rating?: number;
+  lastContactAt?: string;
+  events: ConnectionEvent[];
+  sessionIds: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ConnectionInput {
+  name: string;
+  metLocation?: string;
+  metAt?: string;
+  metContext?: string;
+  approachOpener?: string;
+  approachRisk?: "low" | "medium" | "high";
+  stage?: ConnectionStatus;
+  milestones?: string[];
+  nextMove?: string;
+  notes?: string;
+  rating?: number;
+  closedReason?: string;
+  sessionId?: string;
+}
+
+export interface ConnectionEventInput {
+  type: ConnectionEventType;
+  title?: string;
+  details?: string;
+  occurredAt?: string;
+  location?: string;
+  stage?: ConnectionStatus;
+  sessionId?: string;
+}
+
+export interface ConnectionsOverview {
+  total: number;
+  active: number;
+  closed: number;
+  byStage: Record<string, number>;
+  funnel: { stage: string; label: string; reached: number }[];
+}
+
+export interface PlaybookStage {
+  stage: ConnectionStage;
+  label: string;
+  order: number;
+  intent: string;
+  nextMove: string;
+  milestones: { key: string; label: string }[];
+  traps: string[];
+}
+
+export interface Playbook {
+  stages: PlaybookStage[];
+  eventTypes: { type: ConnectionEventType; label: string; advancesTo?: ConnectionStage }[];
+  principles: string[];
+}
+
+/** Shape of the `tool-proposeConnectionUpdate` UI part while streaming/done. */
+export interface ConnectionUpdateToolPart {
+  type: "tool-proposeConnectionUpdate";
+  toolCallId: string;
+  state: "input-streaming" | "input-available" | "output-available" | "output-error";
+  input?: Record<string, unknown>;
+  output?: unknown;
+  errorText?: string;
+}
+
+export const connectionsKeys = {
+  all: ["connections"] as const,
+  list: (stage?: string) => ["connections", "list", stage ?? "all"] as const,
+  detail: (uuid: string) => ["connections", "detail", uuid] as const,
+  overview: ["connections", "overview"] as const,
+  playbook: ["connections", "playbook"] as const,
+};
+
+export function listConnections(stage?: string) {
+  const qs = stage ? `?stage=${encodeURIComponent(stage)}` : "";
+  return apiFetch<{ connections: Connection[] }>(`/api/connections${qs}`).then(
+    (d) => d.connections,
+  );
+}
+
+export function getConnection(uuid: string) {
+  return apiFetch<Connection>(`/api/connections/${uuid}`);
+}
+
+export function createConnection(input: ConnectionInput) {
+  return apiFetch<Connection>("/api/connections", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function updateConnection(uuid: string, input: Partial<ConnectionInput>) {
+  return apiFetch<Connection>(`/api/connections/${uuid}`, {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  });
+}
+
+export function deleteConnection(uuid: string) {
+  return apiFetch<void>(`/api/connections/${uuid}`, { method: "DELETE" });
+}
+
+export function addConnectionEvent(uuid: string, input: ConnectionEventInput) {
+  return apiFetch<Connection>(`/api/connections/${uuid}/events`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function getConnectionsOverview() {
+  return apiFetch<ConnectionsOverview>("/api/connections/overview");
+}
+
+export function getPlaybook() {
+  return apiFetch<Playbook>("/api/connections/playbook");
+}
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, {
@@ -105,8 +285,11 @@ export function getSession(uuid: string) {
   return apiFetch<ChatSessionDetail>(`/api/sessions/${uuid}`);
 }
 
-export function createSession() {
-  return apiFetch<SessionListItem>("/api/sessions", { method: "POST" });
+export function createSession(connectionId?: string) {
+  return apiFetch<SessionListItem>("/api/sessions", {
+    method: "POST",
+    body: JSON.stringify(connectionId ? { connectionId } : {}),
+  });
 }
 
 export function renameSession(uuid: string, title: string) {

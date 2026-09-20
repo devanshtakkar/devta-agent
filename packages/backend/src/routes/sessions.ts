@@ -11,8 +11,10 @@ import { z } from "zod";
 import { requireAuth } from "../auth.js";
 import { env } from "../env.js";
 import { getConfig } from "../services/config.js";
-import { SYSTEM_PROMPT, chatTools } from "../ai/coach.js";
+import { SYSTEM_PROMPT_WITH_DOSSIER, chatTools } from "../ai/coach.js";
+import { stageLabel } from "../ai/playbook.js";
 import { ChatSession } from "../models/ChatSession.js";
+import { Connection } from "../models/Connection.js";
 
 const router: Router = Router();
 
@@ -60,6 +62,65 @@ async function resolveModel(): Promise<string> {
 
 function iso(d: Date | string): string {
   return d instanceof Date ? d.toISOString() : new Date(d).toISOString();
+}
+
+/**
+ * Compact, real tracker context injected into the system prompt so the agent
+ * can pick up each connection where the user left off.
+ */
+async function buildDossier(
+  userId: string,
+  connectionId?: string,
+): Promise<string | undefined> {
+  const parts: string[] = [];
+
+  if (connectionId) {
+    const c = await Connection.findOne({ uuid: connectionId, userId }).lean<{
+      name: string;
+      stage: string;
+      metLocation?: string;
+      metContext?: string;
+      approachOpener?: string;
+      nextMove?: string;
+      notes?: string;
+      events?: { occurredAt?: Date; type: string; title?: string; details?: string }[];
+    } | null>();
+    if (c) {
+      parts.push(`This chat is about ${c.name} (currently: ${stageLabel(c.stage)}).`);
+      if (c.metLocation) parts.push(`Met at: ${c.metLocation}.`);
+      if (c.metContext) parts.push(`Context: ${c.metContext}`);
+      if (c.approachOpener) parts.push(`Opener used: "${c.approachOpener}"`);
+      if (c.nextMove) parts.push(`Agreed next move: ${c.nextMove}`);
+      if (c.notes) parts.push(`Notes: ${c.notes}`);
+      const timeline = (c.events ?? []).slice(-15).map((e) => {
+        const when = e.occurredAt ? iso(e.occurredAt) : "";
+        const label = e.title || e.type;
+        return `  - ${when} ${label}${e.details ? `: ${e.details}` : ""}`.trim();
+      });
+      if (timeline.length) parts.push(`Her timeline (oldest to newest):\n${timeline.join("\n")}`);
+    }
+  }
+
+  const active = await Connection.find({
+    userId,
+    stage: { $nin: ["failed", "ghosted"] },
+  })
+    .sort({ updatedAt: -1 })
+    .limit(40)
+    .lean<{ name: string; stage: string; nextMove?: string }[]>();
+
+  if (active.length) {
+    parts.push(
+      `Active connections:\n${active
+        .map(
+          (a) =>
+            `  - ${a.name} — ${stageLabel(a.stage)}${a.nextMove ? ` (next: ${a.nextMove})` : ""}`,
+        )
+        .join("\n")}`,
+    );
+  }
+
+  return parts.length ? parts.join("\n") : undefined;
 }
 
 /** Stored/streamed messages need a stable, non-empty id. */
@@ -169,15 +230,19 @@ function refreshTitleIfDefault(sessionId: unknown, situation: string) {
 
 router.post("/", requireAuth, async (req: Request, res: Response) => {
   const userId = getUserId(req);
+  const connectionId =
+    typeof req.body?.connectionId === "string" ? req.body.connectionId : undefined;
   const doc = await ChatSession.create({
     uuid: randomUUID(),
     userId,
     title: "New chat",
+    connectionId,
     messages: [],
   });
   return res.status(201).json({
     uuid: doc.uuid,
     title: doc.title,
+    connectionId: doc.connectionId,
     messageCount: 0,
     preview: "",
     createdAt: doc.createdAt.toISOString(),
@@ -208,11 +273,12 @@ router.get("/:uuid", requireAuth, async (req: Request, res: Response) => {
   const doc = await ChatSession.findOne({
     uuid: parsed.data.uuid,
     userId: getUserId(req),
-  }).lean<{ uuid: string; title: string; messages: StoredMessage[]; createdAt: Date; updatedAt: Date } | null>();
+  }).lean<{ uuid: string; title: string; connectionId?: string; messages: StoredMessage[]; createdAt: Date; updatedAt: Date } | null>();
   if (!doc) return res.status(404).json({ error: "Session not found" });
   return res.json({
     uuid: doc.uuid,
     title: doc.title,
+    connectionId: doc.connectionId,
     createdAt: iso(doc.createdAt),
     updatedAt: iso(doc.updatedAt),
     messages: normalizeMessages(doc.messages ?? []),
@@ -255,9 +321,10 @@ router.post("/:uuid/chat", requireAuth, async (req: Request, res: Response) => {
     return res.status(400).json({ error: "Invalid request", details: parsedBody.error.flatten() });
   }
 
+  const userId = getUserId(req);
   const session = await ChatSession.findOne({
     uuid: parsedParam.data.uuid,
-    userId: getUserId(req),
+    userId,
   });
   if (!session) return res.status(404).json({ error: "Session not found" });
   if (parsedBody.data.messages.length > MAX_MESSAGES) {
@@ -267,19 +334,23 @@ router.post("/:uuid/chat", requireAuth, async (req: Request, res: Response) => {
   const incoming = normalizeMessages(parsedBody.data.messages) as UIMessage[];
   const intent = parsedBody.data.intent;
   const isFirstUserMessage = (session.messages?.length ?? 0) === 0;
+  const dossier = await buildDossier(userId, session.connectionId).catch((err) => {
+    console.error("Failed to build tracker dossier:", err);
+    return undefined;
+  });
 
   try {
     const openrouter = createOpenRouter({ apiKey: env.OPENROUTER_API_KEY });
     const result = streamText({
       model: openrouter(await resolveModel()),
-      system: SYSTEM_PROMPT,
+      system: SYSTEM_PROMPT_WITH_DOSSIER(dossier),
       tools: chatTools,
       toolChoice:
         intent === "approaches"
           ? { type: "tool", toolName: "proposeApproaches" }
           : intent === "branches"
             ? { type: "tool", toolName: "proposeBranches" }
-            : "none",
+            : "auto",
       messages: convertToModelMessages(forModel(incoming)),
       providerOptions: { openrouter: { reasoning: { enabled: true } } },
     });

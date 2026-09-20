@@ -20,12 +20,14 @@ import {
   type BranchToolPart,
   type ChatMessage,
   type ChatSessionDetail,
+  type ConnectionUpdateToolPart,
   type Starter,
 } from "@/lib/api";
 import { setPendingDraft, takePendingDraft } from "@/lib/pending-draft";
 import { ApproachOptions } from "@/components/ApproachOptions";
 import { BranchScenarios } from "@/components/BranchScenarios";
 import { ComposerMenu } from "@/components/ComposerMenu";
+import { ConnectionUpdateCard } from "@/components/ConnectionUpdateCard";
 import { Response } from "@/components/Response";
 import { Thinking } from "@/components/Thinking";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -98,9 +100,11 @@ function UserParts({ message }: { message: ChatMessage }) {
 function AssistantParts({
   message,
   onBranch,
+  sessionId,
 }: {
   message: ChatMessage;
   onBranch: (starter: Starter) => void;
+  sessionId: string | null;
 }) {
   const reasoning = message.parts.filter(
     (p) => p.type === "reasoning",
@@ -115,6 +119,10 @@ function AssistantParts({
   const branchTools = message.parts.filter(
     (p) => p.type === "tool-proposeBranches",
   ) as unknown as BranchToolPart[];
+
+  const connectionUpdates = message.parts.filter(
+    (p) => p.type === "tool-proposeConnectionUpdate",
+  ) as unknown as ConnectionUpdateToolPart[];
 
   const text = message.parts
     .filter((p) => p.type === "text")
@@ -131,6 +139,13 @@ function AssistantParts({
       ))}
       {branchTools.map((tool) => (
         <BranchScenarios key={tool.toolCallId} part={tool} />
+      ))}
+      {connectionUpdates.map((tool) => (
+        <ConnectionUpdateCard
+          key={tool.toolCallId}
+          part={tool}
+          sessionId={sessionId ?? undefined}
+        />
       ))}
       {text.trim() && (
         <div className="w-full min-w-0">
@@ -289,6 +304,13 @@ export function CoachChat({ sessionId }: { sessionId: string | null }) {
     );
   }
 
+  function logToTracker() {
+    setSituation(
+      "Let me log what happened with her. Her name is … and here's what happened: ",
+    );
+    textareaRef.current?.focus();
+  }
+
   const last = messages[messages.length - 1];
   const showWorking =
     busy && (!last || last.role !== "assistant" || last.parts.length === 0);
@@ -350,7 +372,11 @@ export function CoachChat({ sessionId }: { sessionId: string | null }) {
                         {m.role === "user" ? (
                           <UserParts message={m} />
                         ) : (
-                          <AssistantParts message={m} onBranch={branchFromStarter} />
+                          <AssistantParts
+                            message={m}
+                            onBranch={branchFromStarter}
+                            sessionId={sessionId}
+                          />
                         )}
                       </MessageContent>
                     </Message>
@@ -468,6 +494,7 @@ export function CoachChat({ sessionId }: { sessionId: string | null }) {
                 disabled={busy || creating}
                 approachActive={approachActive}
                 onApproaches={toggleApproaches}
+                onLog={logToTracker}
                 onAddImage={() => fileRef.current?.click()}
               />
             </InputGroupAddon>

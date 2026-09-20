@@ -10,11 +10,29 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as PlaybookRouteImport } from './routes/playbook'
+import { Route as ConnectionsIndexRouteImport } from './routes/connections/index'
+import { Route as ConnectionsUuidRouteImport } from './routes/connections/$uuid'
 import { Route as SSessionIdRouteImport } from './routes/s.$sessionId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PlaybookRoute = PlaybookRouteImport.update({
+  id: '/playbook',
+  path: '/playbook',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ConnectionsIndexRoute = ConnectionsIndexRouteImport.update({
+  id: '/connections/',
+  path: '/connections/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ConnectionsUuidRoute = ConnectionsUuidRouteImport.update({
+  id: '/connections/$uuid',
+  path: '/connections/$uuid',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SSessionIdRoute = SSessionIdRouteImport.update({
@@ -25,28 +43,48 @@ const SSessionIdRoute = SSessionIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/playbook': typeof PlaybookRoute
+  '/connections/$uuid': typeof ConnectionsUuidRoute
   '/s/$sessionId': typeof SSessionIdRoute
+  '/connections/': typeof ConnectionsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/playbook': typeof PlaybookRoute
+  '/connections/$uuid': typeof ConnectionsUuidRoute
   '/s/$sessionId': typeof SSessionIdRoute
+  '/connections': typeof ConnectionsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/playbook': typeof PlaybookRoute
+  '/connections/$uuid': typeof ConnectionsUuidRoute
   '/s/$sessionId': typeof SSessionIdRoute
+  '/connections/': typeof ConnectionsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/s/$sessionId'
+  fullPaths:
+    '/' | '/playbook' | '/connections/$uuid' | '/s/$sessionId' | '/connections/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/s/$sessionId'
-  id: '__root__' | '/' | '/s/$sessionId'
+  to:
+    '/' | '/playbook' | '/connections/$uuid' | '/s/$sessionId' | '/connections'
+  id:
+    | '__root__'
+    | '/'
+    | '/playbook'
+    | '/connections/$uuid'
+    | '/s/$sessionId'
+    | '/connections/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  PlaybookRoute: typeof PlaybookRoute
+  ConnectionsUuidRoute: typeof ConnectionsUuidRoute
   SSessionIdRoute: typeof SSessionIdRoute
+  ConnectionsIndexRoute: typeof ConnectionsIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -56,6 +94,27 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/playbook': {
+      id: '/playbook'
+      path: '/playbook'
+      fullPath: '/playbook'
+      preLoaderRoute: typeof PlaybookRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/connections/': {
+      id: '/connections/'
+      path: '/connections'
+      fullPath: '/connections/'
+      preLoaderRoute: typeof ConnectionsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/connections/$uuid': {
+      id: '/connections/$uuid'
+      path: '/connections/$uuid'
+      fullPath: '/connections/$uuid'
+      preLoaderRoute: typeof ConnectionsUuidRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/s/$sessionId': {
@@ -70,7 +129,10 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  PlaybookRoute: PlaybookRoute,
+  ConnectionsUuidRoute: ConnectionsUuidRoute,
   SSessionIdRoute: SSessionIdRoute,
+  ConnectionsIndexRoute: ConnectionsIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

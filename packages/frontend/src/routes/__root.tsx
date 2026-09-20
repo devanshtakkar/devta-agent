@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { Outlet, createRootRoute } from "@tanstack/react-router";
-import { LogOut, MenuIcon } from "lucide-react";
+import { Link, Outlet, createRootRoute } from "@tanstack/react-router";
+import { HeartIcon, LogOut, MenuIcon } from "lucide-react";
 import { authClient, useSession } from "@/lib/auth-client";
 import { AuthForm } from "@/components/AuthForm";
 import { SessionDrawer } from "@/components/SessionDrawer";
@@ -70,6 +70,16 @@ function RootShell() {
             <span className="text-muted-foreground text-[13px]">· wingman</span>
           </span>
         </span>
+        <Button
+          size="icon-sm"
+          variant="ghost"
+          aria-label="Your connections"
+          className="text-rose-500 hover:text-rose-500"
+          nativeButton={false}
+          render={<Link to="/connections" />}
+        >
+          <HeartIcon />
+        </Button>
         <div className="flex items-center gap-2">
           <span
             className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${online ? "bg-emerald-500/15 text-emerald-600" : "bg-amber-500/15 text-amber-600"}`}

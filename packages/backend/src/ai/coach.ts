@@ -1,5 +1,10 @@
 import { tool } from "ai";
 import { z } from "zod";
+import {
+  CONNECTION_STATUSES,
+  EVENT_TYPES,
+} from "../models/Connection.js";
+import { GLOBAL_PRINCIPLES, STAGE_PLAYBOOK } from "./playbook.js";
 
 export const SYSTEM_PROMPT = `You are Devta, a respectful, consent-first dating wingman whose end goal is to help the user build genuine, consensual relationships that can grow into something serious and, eventually, marriage.
 
@@ -12,7 +17,26 @@ Your coaching:
 - Always include a graceful exit: every next move you suggest must let the user bow out kindly and keep his dignity, whatever the response.
 - The user is often in a live moment and needs something actionable in seconds. Be concise and skimmable: lead with the exact thing to say or do, then a short why. Prefer short paragraphs or tight bullets over long essays.
 - Talk like a supportive wingman in a normal chat. Ask one short clarifying question when the scene is missing key detail (who, where, what's happening) instead of guessing.
-- Do not format every reply as a list of options. Only produce a set of distinct approaches when the user explicitly asks for approach options.`;
+- Do not format every reply as a list of options. Only produce a set of distinct approaches when the user explicitly asks for approach options.
+
+Coaching model — always move the connection forward without pressure:
+${GLOBAL_PRINCIPLES.map((p) => `- ${p}`).join("\n")}
+
+Stage ladder and the default next move at each stage:
+${STAGE_PLAYBOOK.map(
+  (s) => `- ${s.label} (${s.stage}): ${s.intent} Next move: ${s.nextMove}`,
+).join("\n")}
+
+Tracking:
+- The user tracks each girl as a "connection" with a stage and a timeline.
+- When the user reports a real-world outcome (opener sent, she replied, number exchanged, date planned or done, intimacy, relationship progress, rejection, ghosting) or asks to save/update a girl, call proposeConnectionUpdate with the details you actually know.
+- Never invent names, places, times or events. If a key detail is missing, ask one short question first.
+- proposeConnectionUpdate only proposes; the user confirms in the app, so keep fields factual and concise.`;
+
+export const SYSTEM_PROMPT_WITH_DOSSIER = (dossier?: string) =>
+  dossier
+    ? `${SYSTEM_PROMPT}\n\n---\nCurrent tracker context (real data — use it to pick up where you left off, do not repeat it back verbatim):\n${dossier}`
+    : SYSTEM_PROMPT;
 
 const approachSchema = z.object({
   id: z.string().describe("Short unique id, e.g. 's1'."),
@@ -70,7 +94,42 @@ export const proposeBranches = tool({
   execute: async (input) => input,
 });
 
-export const chatTools = { proposeApproaches, proposeBranches };
+const connectionUpdateSchema = z.object({
+  action: z
+    .enum(["create", "log"])
+    .describe("create a new connection, or log an event on an existing one."),
+  connectionName: z.string().describe("Her name or a short label for her."),
+  connectionId: z
+    .string()
+    .optional()
+    .describe("Existing connection uuid, when known."),
+  stage: z
+    .enum(CONNECTION_STATUSES)
+    .optional()
+    .describe("New stage, if the outcome changes it."),
+  eventType: z.enum(EVENT_TYPES).optional().describe("Kind of event that happened."),
+  title: z.string().optional().describe("Short summary title for the event."),
+  details: z.string().optional().describe("What happened, in the user's words."),
+  occurredAt: z.string().optional().describe("ISO date/time it happened, if known."),
+  location: z.string().optional().describe("Where it happened."),
+  metLocation: z.string().optional().describe("Where they met (create only)."),
+  metAt: z.string().optional().describe("When they met (create only)."),
+  metContext: z.string().optional().describe("Scene/context when they met."),
+  approachOpener: z.string().optional().describe("The opener used, if known."),
+  nextMove: z.string().optional().describe("The agreed next move."),
+  notes: z.string().optional().describe("Freeform notes."),
+});
+
+export type ConnectionUpdateInput = z.infer<typeof connectionUpdateSchema>;
+
+export const proposeConnectionUpdate = tool({
+  description:
+    "Propose creating or updating a tracked connection (a girl) with a real-world outcome. Use when the user reports what happened or asks to save/update a girl. This only proposes — the user confirms in the app. Never invent details.",
+  inputSchema: connectionUpdateSchema,
+  execute: async (input) => input,
+});
+
+export const chatTools = { proposeApproaches, proposeBranches, proposeConnectionUpdate };
 
 export type StarterOutput = z.infer<typeof starterSchema>;
 export type BranchesOutput = z.infer<typeof branchesSchema>;

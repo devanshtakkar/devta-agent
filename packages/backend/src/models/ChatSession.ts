@@ -15,6 +15,8 @@ const chatSessionSchema = new Schema(
     uuid: { type: String, required: true, unique: true, index: true },
     userId: { type: String, required: true, index: true },
     title: { type: String, required: true, default: "New chat" },
+    /** Optional link to the tracked connection this chat is coaching. */
+    connectionId: { type: String, index: true },
     messages: { type: [messageSubSchema], default: [] },
   },
   { timestamps: true },
