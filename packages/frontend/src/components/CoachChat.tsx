@@ -137,6 +137,7 @@ export function CoachChat({ sessionId }: { sessionId: string | null }) {
   const queryClient = useQueryClient();
   const [situation, setSituation] = useState("");
   const [imageDataUrl, setImageDataUrl] = useState<string | undefined>();
+  const [approachActive, setApproachActive] = useState(false);
   const [creating, setCreating] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -188,11 +189,15 @@ export function CoachChat({ sessionId }: { sessionId: string | null }) {
     const draft = takePendingDraft();
     if (!draft) return;
     const files = draft.imageDataUrl ? [imagePart(draft.imageDataUrl)] : undefined;
-    void sendMessage({ text: draft.text, files });
+    void sendMessage(
+      { text: draft.text, files },
+      draft.intent ? { body: { intent: draft.intent } } : undefined,
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId]);
 
   const busy = status === "submitted" || status === "streaming";
+  const isFirstMessage = messages.length === 0;
 
   async function onPickImage(file: File | undefined) {
     if (!file) return;
@@ -203,15 +208,16 @@ export function CoachChat({ sessionId }: { sessionId: string | null }) {
     }
   }
 
-  function send(files?: FileUIPart[]) {
-    void sendMessage(
-      files && files.length > 0 ? { text: situation.trim(), files } : { text: situation.trim() },
-    );
-  }
-
   async function submit(prefill?: string) {
+    if (busy || creating) return;
     const text = (prefill ?? situation).trim();
-    if (!text || busy || creating) return;
+    const useApproaches = approachActive;
+    // The first message needs the user's own context; later runs can request
+    // approaches with no input at all.
+    const canSend = text.length > 0 || (useApproaches && !isFirstMessage);
+    if (!canSend) return;
+
+    const intent = useApproaches ? ({ intent: "approaches" } as const) : undefined;
 
     if (sessionId === null) {
       setCreating(true);
@@ -224,9 +230,14 @@ export function CoachChat({ sessionId }: { sessionId: string | null }) {
           updatedAt: created.updatedAt,
           messages: [],
         });
-        setPendingDraft({ text, imageDataUrl });
+        setPendingDraft({
+          text: text || APPROACH_PROMPT,
+          imageDataUrl,
+          intent: intent?.intent,
+        });
         setSituation("");
         setImageDataUrl(undefined);
+        setApproachActive(false);
         void navigate({
           to: "/s/$sessionId",
           params: { sessionId: created.uuid },
@@ -241,14 +252,22 @@ export function CoachChat({ sessionId }: { sessionId: string | null }) {
     }
 
     const files = imageDataUrl ? [imagePart(imageDataUrl)] : undefined;
+    const messageText = text || APPROACH_PROMPT;
     setSituation("");
     setImageDataUrl(undefined);
-    send(files);
+    setApproachActive(false);
+    void sendMessage(
+      files && files.length > 0 ? { text: messageText, files } : { text: messageText },
+      intent ? { body: intent } : undefined,
+    );
   }
 
-  function requestApproaches() {
-    if (!sessionId || busy || messages.length === 0) return;
-    void sendMessage({ text: APPROACH_PROMPT }, { body: { intent: "approaches" } });
+  function toggleApproaches() {
+    if (busy || creating) return;
+    setApproachActive((active) => {
+      if (!active) textareaRef.current?.focus();
+      return !active;
+    });
   }
 
   function useStarter(starter: Starter) {
@@ -408,12 +427,33 @@ export function CoachChat({ sessionId }: { sessionId: string | null }) {
             className="hidden"
             onChange={(e) => void onPickImage(e.target.files?.[0])}
           />
+          {approachActive && (
+            <div className="border-primary/30 bg-primary/5 text-primary mb-2 flex items-center gap-2 rounded-xl border px-3 py-2 text-sm">
+              <SparklesIcon className="size-4 shrink-0" />
+              <span className="flex flex-1 flex-col">
+                Approach options active
+                <span className="text-muted-foreground text-xs">
+                  {isFirstMessage
+                    ? "Describe the scene, then send"
+                    : "Send with or without a message"}
+                </span>
+              </span>
+              <button
+                type="button"
+                aria-label="Remove approach options"
+                className="hover:bg-primary/10 -mr-1 flex size-7 shrink-0 items-center justify-center rounded-full transition-colors"
+                onClick={() => setApproachActive(false)}
+              >
+                <XIcon className="size-4" />
+              </button>
+            </div>
+          )}
           <InputGroup>
             <InputGroupAddon align="inline-start" className="py-0 pl-2">
               <ComposerMenu
                 disabled={busy || creating}
-                approachesDisabled={busy || !sessionId || messages.length === 0}
-                onApproaches={requestApproaches}
+                approachActive={approachActive}
+                onApproaches={toggleApproaches}
                 onAddImage={() => fileRef.current?.click()}
               />
             </InputGroupAddon>
@@ -451,7 +491,7 @@ export function CoachChat({ sessionId }: { sessionId: string | null }) {
                   variant="default"
                   size="icon-sm"
                   aria-label="Send"
-                  disabled={!situation.trim() || creating}
+                  disabled={(!situation.trim() && !(approachActive && !isFirstMessage)) || creating}
                   onClick={() => void submit()}
                 >
                   {creating ? <Spinner /> : <SendIcon />}

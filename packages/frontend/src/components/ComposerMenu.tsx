@@ -1,17 +1,17 @@
 import { Menu } from "@base-ui/react/menu";
-import { ImagePlusIcon, Plus, SparklesIcon } from "lucide-react";
+import { CheckIcon, ImagePlusIcon, Plus, SparklesIcon } from "lucide-react";
 import { cn } from "cn";
 
 export function ComposerMenu({
   onAddImage,
   onApproaches,
   disabled,
-  approachesDisabled,
+  approachActive,
 }: {
   onAddImage: () => void;
   onApproaches: () => void;
   disabled?: boolean;
-  approachesDisabled?: boolean;
+  approachActive?: boolean;
 }) {
   return (
     <Menu.Root>
@@ -22,6 +22,7 @@ export function ComposerMenu({
           "flex size-8 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors outline-none",
           "hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/30",
           "disabled:pointer-events-none disabled:opacity-50",
+          approachActive && "bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary",
         )}
       >
         <Plus className="size-5" />
@@ -37,7 +38,6 @@ export function ComposerMenu({
             )}
           >
             <Menu.Item
-              disabled={approachesDisabled}
               onClick={onApproaches}
               className={cn(
                 "flex cursor-default items-center gap-2.5 rounded-xl px-3 py-2 text-sm outline-none select-none",
@@ -46,12 +46,13 @@ export function ComposerMenu({
               )}
             >
               <SparklesIcon className="size-4" />
-              <span className="flex flex-col">
+              <span className="flex flex-1 flex-col">
                 Approach options
                 <span className="text-muted-foreground text-xs">
                   Compose 5 openers you can act on
                 </span>
               </span>
+              {approachActive && <CheckIcon className="size-4" />}
             </Menu.Item>
             <Menu.Item
               onClick={onAddImage}

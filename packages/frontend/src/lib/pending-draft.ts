@@ -1,6 +1,7 @@
 export interface PendingDraft {
   text: string;
   imageDataUrl?: string;
+  intent?: "approaches";
 }
 
 /**
