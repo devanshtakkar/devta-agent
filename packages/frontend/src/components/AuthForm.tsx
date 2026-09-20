@@ -1,10 +1,12 @@
 import { useState } from "react";
+import { Eye, EyeOff } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 
 export function AuthForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -40,16 +42,29 @@ export function AuthForm() {
           value={email}
           onChange={(e) => setEmail(e.target.value)}
         />
-        <input
-          className="border-input bg-background h-11 rounded-xl border px-3 text-base"
-          placeholder="Password (8+ chars)"
-          type="password"
-          autoComplete="current-password"
-          required
-          minLength={8}
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-        />
+        <div className="relative">
+          <input
+            className="border-input bg-background h-11 w-full rounded-xl border px-3 pr-11 text-base"
+            placeholder="Password (8+ chars)"
+            type={showPassword ? "text" : "password"}
+            autoComplete="current-password"
+            required
+            minLength={8}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            aria-label={showPassword ? "Hide password" : "Show password"}
+            aria-pressed={showPassword}
+            onClick={() => setShowPassword((v) => !v)}
+            className="absolute top-1/2 right-1 -translate-y-1/2"
+          >
+            {showPassword ? <EyeOff /> : <Eye />}
+          </Button>
+        </div>
         {error && <p className="text-destructive text-sm">{error}</p>}
         <Button type="submit" size="lg" disabled={pending}>
           {pending ? "Please wait…" : "Sign in"}
