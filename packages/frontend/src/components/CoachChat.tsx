@@ -1,8 +1,37 @@
 import { useRef, useState } from "react";
-import { ImagePlus, Loader2, Send, X } from "lucide-react";
+import { CheckIcon, ImagePlusIcon, SendIcon, SparklesIcon, TriangleAlertIcon, XIcon } from "lucide-react";
 import { fetchIdeas, fileToDataUrl, type IdeasResponse, type Starter } from "@/lib/api";
 import { StarterCarousel } from "@/components/StarterCarousel";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  Attachment,
+  AttachmentAction,
+  AttachmentContent,
+  AttachmentDescription,
+  AttachmentMedia,
+  AttachmentTitle,
+} from "@/components/ui/attachment";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Bubble, BubbleContent } from "@/components/ui/bubble";
 import { Button } from "@/components/ui/button";
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupTextarea,
+} from "@/components/ui/input-group";
+import { Marker, MarkerContent, MarkerIcon } from "@/components/ui/marker";
+import { Message, MessageAvatar, MessageContent } from "@/components/ui/message";
+import {
+  MessageScroller,
+  MessageScrollerButton,
+  MessageScrollerContent,
+  MessageScrollerItem,
+  MessageScrollerProvider,
+  MessageScrollerViewport,
+} from "@/components/ui/message-scroller";
+import { Spinner } from "@/components/ui/spinner";
 
 interface Turn {
   id: number;
@@ -13,6 +42,17 @@ interface Turn {
 }
 
 const QUICK = ["Cafe", "Restaurant", "Street", "Party", "Campus"];
+
+function AiAvatar() {
+  return (
+    <MessageAvatar>
+      <Avatar size="sm">
+        <AvatarImage src="/apple-touch-icon.png" alt="devta" />
+        <AvatarFallback>d</AvatarFallback>
+      </Avatar>
+    </MessageAvatar>
+  );
+}
 
 export function CoachChat() {
   const [situation, setSituation] = useState("");
@@ -55,95 +95,139 @@ export function CoachChat() {
   }
 
   return (
-    <div className="mx-auto flex h-full min-h-0 w-full max-w-md flex-1 flex-col">
-      {/* thread — the only vertically scrolling region */}
-      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain px-4 pt-4 pb-4">
-        {turns.length === 0 && (
-          <div className="mt-6">
-            <h1 className="text-2xl font-semibold tracking-tight">Where are you right now?</h1>
-            <p className="text-muted-foreground mt-1 text-sm">
-              Describe the scene in one line. Add a photo for extra context. Get 4–5 openers in
-              seconds — swipe, branch, act.
-            </p>
-          </div>
-        )}
-        {turns.map((t) => (
-          <div key={t.id} className="flex flex-col gap-2">
-            <div className="bg-primary text-primary-foreground self-end rounded-2xl rounded-br-md px-3.5 py-2.5 text-[15px] whitespace-pre-line">
-              {t.situation}
-            </div>
-            {t.imagePreview && (
-              <img
-                src={t.imagePreview}
-                alt="scene context"
-                className="self-end rounded-2xl border object-cover"
-                style={{ width: 160, height: 120 }}
-              />
-            )}
-            {t.error && <p className="text-destructive text-sm">{t.error}</p>}
-            {t.ideas && (
-              <div className="flex flex-col gap-2">
-                <p className="text-[15px] leading-relaxed whitespace-pre-line">{t.ideas.overview}</p>
-                <StarterCarousel
-                  situation={t.situation}
-                  starters={t.ideas.starters}
-                  onUse={(s) => {
-                    setUsed(s);
-                    void navigator.clipboard?.writeText(s.openerLine).catch(() => {});
-                  }}
-                />
-              </div>
-            )}
-          </div>
-        ))}
-        {loading && (
-          <p className="text-muted-foreground flex items-center gap-2 text-sm">
-            <Loader2 className="size-4 animate-spin" /> Thinking of openers…
-          </p>
-        )}
-        {used && (
-          <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm">
-            Copied to clipboard: “{used.openerLine}” — go say it, then come back and branch if you
-            need the follow-up.
-            <button
-              type="button"
-              className="ml-2 underline"
-              onClick={() => setUsed(null)}
-            >
-              dismiss
-            </button>
-          </div>
-        )}
-      </div>
+    <MessageScrollerProvider autoScroll>
+      <div className="mx-auto flex h-full min-h-0 w-full max-w-md flex-1 flex-col">
+        <MessageScroller className="min-h-0 flex-1">
+          <MessageScrollerViewport>
+            <MessageScrollerContent className="gap-4 px-4 pt-4 pb-4">
+              {turns.length === 0 && (
+                <Empty>
+                  <EmptyHeader>
+                    <EmptyMedia variant="icon">
+                      <SparklesIcon />
+                    </EmptyMedia>
+                    <EmptyTitle>Where are you right now?</EmptyTitle>
+                    <EmptyDescription>
+                      Describe the scene in one line. Add a photo for extra context. Get 4–5
+                      openers in seconds — swipe, branch, act.
+                    </EmptyDescription>
+                  </EmptyHeader>
+                </Empty>
+              )}
+              {turns.map((t) => (
+                <MessageScrollerItem key={t.id} messageId={String(t.id)} scrollAnchor>
+                  <Message align="end">
+                    <MessageContent>
+                      <Bubble variant="default" align="end">
+                        <BubbleContent>{t.situation}</BubbleContent>
+                      </Bubble>
+                      {t.imagePreview && (
+                        <Attachment state="done" size="sm">
+                          <AttachmentMedia variant="image">
+                            <img src={t.imagePreview} alt="scene context" />
+                          </AttachmentMedia>
+                          <AttachmentContent>
+                            <AttachmentTitle>Scene photo</AttachmentTitle>
+                          </AttachmentContent>
+                        </Attachment>
+                      )}
+                    </MessageContent>
+                  </Message>
+                  {t.error && (
+                    <Alert variant="destructive">
+                      <TriangleAlertIcon />
+                      <AlertDescription>{t.error}</AlertDescription>
+                    </Alert>
+                  )}
+                  {t.ideas && (
+                    <Message align="start">
+                      <AiAvatar />
+                      <MessageContent>
+                        <Bubble variant="muted" align="start">
+                          <BubbleContent>{t.ideas.overview}</BubbleContent>
+                        </Bubble>
+                        <StarterCarousel
+                          situation={t.situation}
+                          starters={t.ideas.starters}
+                          onUse={(s) => {
+                            setUsed(s);
+                            void navigator.clipboard?.writeText(s.openerLine).catch(() => {});
+                          }}
+                        />
+                      </MessageContent>
+                    </Message>
+                  )}
+                </MessageScrollerItem>
+              ))}
+              {loading && (
+                <MessageScrollerItem messageId="thinking">
+                  <Message align="start">
+                    <AiAvatar />
+                    <MessageContent>
+                      <p className="text-muted-foreground flex items-center gap-2 px-3.5 text-sm">
+                        <Spinner /> Thinking of openers…
+                      </p>
+                    </MessageContent>
+                  </Message>
+                </MessageScrollerItem>
+              )}
+              {used && (
+                <MessageScrollerItem messageId="copied-note">
+                  <Marker>
+                    <MarkerIcon>
+                      <CheckIcon />
+                    </MarkerIcon>
+                    <MarkerContent>
+                      Copied to clipboard: “{used.openerLine}” — go say it, then come back and
+                      branch if you need the follow-up.
+                    </MarkerContent>
+                    <Button
+                      type="button"
+                      variant="link"
+                      size="sm"
+                      className="ml-auto shrink-0"
+                      onClick={() => setUsed(null)}
+                    >
+                      dismiss
+                    </Button>
+                  </Marker>
+                </MessageScrollerItem>
+              )}
+            </MessageScrollerContent>
+          </MessageScrollerViewport>
+          <MessageScrollerButton />
+        </MessageScroller>
 
-      {/* composer — pinned in flow at the bottom, thread scrolls above it */}
-      <div className="border-border bg-background w-full shrink-0 border-t p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-        <div className="mb-2 flex gap-1.5 overflow-x-auto">
-          {QUICK.map((q) => (
-            <button
-              key={q}
-              type="button"
-              onClick={() => submit(`I'm in a ${q.toLowerCase()}. There's a girl nearby I'd like to talk to politely. Quick context: `)}
-              className="border-border shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium"
-            >
-              {q}
-            </button>
-          ))}
-        </div>
-        {imageDataUrl && (
-          <div className="relative mb-2 w-fit">
-            <img src={imageDataUrl} alt="context" className="h-16 w-24 rounded-xl border object-cover" />
-            <button
-              type="button"
-              aria-label="Remove image"
-              onClick={() => setImageDataUrl(undefined)}
-              className="absolute -top-2 -right-2 rounded-full bg-black p-1 text-white"
-            >
-              <X className="size-3" />
-            </button>
+        {/* composer */}
+        <div className="border-border bg-background w-full shrink-0 border-t p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          <div className="mb-2 flex gap-1.5 overflow-x-auto">
+            {QUICK.map((q) => (
+              <Button
+                key={q}
+                type="button"
+                size="sm"
+                variant="outline"
+                className="shrink-0 rounded-full"
+                onClick={() => submit(`I'm in a ${q.toLowerCase()}. There's a girl nearby I'd like to talk to politely. Quick context: `)}
+              >
+                {q}
+              </Button>
+            ))}
           </div>
-        )}
-        <div className="flex items-end gap-2">
+          {imageDataUrl && (
+            <Attachment state="done" size="sm" className="mb-2">
+              <AttachmentMedia variant="image">
+                <img src={imageDataUrl} alt="context" />
+              </AttachmentMedia>
+              <AttachmentContent>
+                <AttachmentTitle>Scene photo</AttachmentTitle>
+                <AttachmentDescription>Attached to your next message</AttachmentDescription>
+              </AttachmentContent>
+              <AttachmentAction aria-label="Remove image" onClick={() => setImageDataUrl(undefined)}>
+                <XIcon />
+              </AttachmentAction>
+            </Attachment>
+          )}
           <input
             ref={fileRef}
             type="file"
@@ -152,37 +236,51 @@ export function CoachChat() {
             className="hidden"
             onChange={(e) => void onPickImage(e.target.files?.[0])}
           />
-          <Button
-            type="button"
-            size="icon"
-            variant="outline"
-            aria-label="Add photo for context"
-            onClick={() => fileRef.current?.click()}
-          >
-            <ImagePlus />
-          </Button>
-          <textarea
-            value={situation}
-            onChange={(e) => setSituation(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                void submit();
-              }
-            }}
-            rows={2}
-            enterKeyHint="send"
-            placeholder="e.g. Cafe, she's reading alone by the window…"
-            className="border-input bg-background max-h-28 min-h-11 flex-1 resize-none rounded-xl border px-3 py-2 text-[16px] outline-none"
-          />
-          <Button type="button" size="icon-lg" aria-label="Get ideas" disabled={!situation.trim() || loading} onClick={() => void submit()}>
-            <Send />
-          </Button>
+          <InputGroup>
+            <InputGroupTextarea
+              value={situation}
+              onChange={(e) => setSituation(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  void submit();
+                }
+              }}
+              rows={2}
+              enterKeyHint="send"
+              placeholder="e.g. Cafe, she's reading alone by the window…"
+              aria-label="Describe the situation"
+              // Inline style wins over the registry's `field-sizing-content`
+              // class (same-specificity utilities resolve by stylesheet order,
+              // so a class override isn't deterministic). Fixed rows keep the
+              // composer compact like before.
+              style={{ fieldSizing: "fixed" }}
+              className="max-h-28 min-h-11 pl-3 text-[16px]"
+            />
+            <InputGroupAddon align="block-end">
+              <InputGroupButton
+                type="button"
+                size="icon-sm"
+                aria-label="Add photo for context"
+                onClick={() => fileRef.current?.click()}
+              >
+                <ImagePlusIcon />
+              </InputGroupButton>
+              <InputGroupButton
+                type="button"
+                variant="default"
+                size="icon-sm"
+                aria-label="Get ideas"
+                disabled={!situation.trim() || loading}
+                className="ml-auto"
+                onClick={() => void submit()}
+              >
+                <SendIcon />
+              </InputGroupButton>
+            </InputGroupAddon>
+          </InputGroup>
         </div>
-        <p className="text-muted-foreground mt-1 text-center text-[11px]">
-          No voice button — use your phone keyboard mic. Be respectful, read signals, exit gracefully.
-        </p>
       </div>
-    </div>
+    </MessageScrollerProvider>
   );
 }

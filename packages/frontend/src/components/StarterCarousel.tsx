@@ -1,12 +1,35 @@
 import { useState } from "react";
+import { CheckIcon, GitBranchIcon, TriangleAlertIcon } from "lucide-react";
 import { fetchBranch, type BranchResponse, type Starter } from "@/lib/api";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Bubble, BubbleContent } from "@/components/ui/bubble";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Carousel, CarouselContent, CarouselItem } from "@/components/ui/carousel";
+import {
+  Drawer,
+  DrawerClose,
+  DrawerContent,
+  DrawerDescription,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerTitle,
+} from "@/components/ui/drawer";
+import { Skeleton } from "@/components/ui/skeleton";
 
-const RISK_STYLE: Record<Starter["risk"], string> = {
-  low: "bg-emerald-500/15 text-emerald-600",
-  medium: "bg-amber-500/15 text-amber-600",
-  high: "bg-rose-500/15 text-rose-600",
+const RISK_VARIANT: Record<Starter["risk"], "secondary" | "outline" | "destructive"> = {
+  low: "secondary",
+  medium: "outline",
+  high: "destructive",
 };
 
 export function StarterCarousel({
@@ -41,80 +64,107 @@ export function StarterCarousel({
   }
 
   return (
-    <div>
-      {/* swipeable cards */}
-      <div className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2">
-        {starters.map((s, i) => (
-          <article
-            key={s.id}
-            className="border-border bg-card w-[82%] max-w-[340px] shrink-0 snap-center rounded-2xl border p-4 shadow-sm"
-          >
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-muted-foreground text-xs font-medium">
-                Option {i + 1}/{starters.length}
-              </span>
-              <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium", RISK_STYLE[s.risk])}>
-                {s.risk} key
-              </span>
-            </div>
-            <h3 className="mt-1 text-base font-semibold">{s.title}</h3>
-            <p className="bg-muted mt-2 rounded-xl p-2.5 text-[15px] leading-snug font-medium">
-              “{s.openerLine}”
-            </p>
-            <p className="text-muted-foreground mt-2 text-[13px] leading-snug">{s.why}</p>
-            <p className="mt-1 text-[13px]">
-              <span className="font-semibold">Next: </span>
-              {s.nextMove}
-            </p>
-            <div className="mt-3 flex gap-2">
-              <Button size="sm" className="flex-1" onClick={() => openBranch(s)}>
-                Branch ▶
-              </Button>
-              <Button size="sm" variant="outline" className="flex-1" onClick={() => onUse(s)}>
-                Use this
-              </Button>
-            </div>
-          </article>
-        ))}
-      </div>
+    <div className="min-w-0">
+      <Carousel className="-mx-4 px-4">
+        <CarouselContent className="-ml-3">
+          {starters.map((s, i) => (
+            <CarouselItem key={s.id} className="max-w-[340px] basis-[82%] pl-3">
+              <Card className="h-full">
+                <CardHeader>
+                  <CardDescription>
+                    Option {i + 1} of {starters.length}
+                  </CardDescription>
+                  <CardAction>
+                    <Badge variant={RISK_VARIANT[s.risk]}>{s.risk} key</Badge>
+                  </CardAction>
+                  <CardTitle>{s.title}</CardTitle>
+                </CardHeader>
+                <CardContent className="flex flex-col gap-2">
+                  <Bubble variant="muted" align="start">
+                    <BubbleContent>“{s.openerLine}”</BubbleContent>
+                  </Bubble>
+                  <p className="text-muted-foreground text-[13px] leading-snug">{s.why}</p>
+                  <p className="text-[13px]">
+                    <span className="font-semibold">Next: </span>
+                    {s.nextMove}
+                  </p>
+                </CardContent>
+                <CardFooter className="gap-2">
+                  <Button size="sm" className="flex-1" onClick={() => openBranch(s)}>
+                    <GitBranchIcon data-icon="inline-start" />
+                    Branch
+                  </Button>
+                  <Button size="sm" variant="outline" className="flex-1" onClick={() => onUse(s)}>
+                    <CheckIcon data-icon="inline-start" />
+                    Use this
+                  </Button>
+                </CardFooter>
+              </Card>
+            </CarouselItem>
+          ))}
+        </CarouselContent>
+      </Carousel>
 
-      {/* branch sheet */}
-      {activeId && (
-        <div className="border-border bg-background fixed inset-x-0 bottom-0 z-50 mx-auto max-h-[82dvh] w-full max-w-md overflow-y-auto rounded-t-3xl border-t p-4 shadow-2xl">
-          <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-black/15" />
-          <div className="flex items-center justify-between">
-            <h3 className="text-base font-semibold">
+      <Drawer
+        open={activeId !== null}
+        onOpenChange={(open) => {
+          if (!open) setActiveId(null);
+        }}
+        showSwipeHandle
+      >
+        <DrawerContent className="mx-auto w-full max-w-md">
+          <DrawerHeader>
+            <DrawerTitle>
               {branchFor ? `If you open with: “${branchFor.openerLine}”` : "Branch"}
-            </h3>
-            <Button size="sm" variant="ghost" onClick={() => setActiveId(null)}>
-              Close
-            </Button>
-          </div>
-          {loading && <p className="text-muted-foreground py-6 text-center text-sm">Preparing likely replies…</p>}
-          {error && <p className="text-destructive py-4 text-sm">{error}</p>}
-          {branch && (
-            <div className="mt-2 flex flex-col gap-3 pb-6">
-              {branch.scenarios.map((sc, i) => (
-                <div key={i} className="border-border rounded-2xl border p-3">
-                  <p className="text-xs font-semibold tracking-wide uppercase opacity-60">
-                    If she says {i + 1}
-                  </p>
-                  <p className="mt-0.5 text-sm italic">“{sc.herResponse}”</p>
-                  <p className="mt-2 text-sm">
-                    <span className="font-semibold">You: </span>
-                    {sc.yourReply}
-                  </p>
-                  <p className="text-muted-foreground mt-1 text-xs">{sc.tip}</p>
-                </div>
-              ))}
-              <div className="rounded-2xl bg-emerald-500/10 p-3 text-sm">
-                <span className="font-semibold">Graceful exit: </span>
-                {branch.exitLine}
+            </DrawerTitle>
+            <DrawerDescription>Likely replies, your next move, plus a graceful exit.</DrawerDescription>
+          </DrawerHeader>
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-6">
+            {loading && (
+              <div className="flex flex-col gap-2 py-2" role="status" aria-label="Loading replies">
+                <Skeleton className="h-4 w-3/4" />
+                <Skeleton className="h-20 w-full" />
+                <Skeleton className="h-20 w-full" />
+                <Skeleton className="h-12 w-full" />
               </div>
-            </div>
-          )}
-        </div>
-      )}
+            )}
+            {error && (
+              <Alert variant="destructive">
+                <TriangleAlertIcon />
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
+            {branch && (
+              <div className="flex flex-col gap-3">
+                {branch.scenarios.map((sc, i) => (
+                  <Card key={i} size="sm">
+                    <CardHeader>
+                      <CardDescription>If she says {i + 1}</CardDescription>
+                      <CardTitle className="text-[15px] font-normal italic">
+                        “{sc.herResponse}”
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="flex flex-col gap-1">
+                      <p className="text-sm">
+                        <span className="font-semibold">You: </span>
+                        {sc.yourReply}
+                      </p>
+                      <p className="text-muted-foreground text-xs">{sc.tip}</p>
+                    </CardContent>
+                  </Card>
+                ))}
+                <Alert>
+                  <AlertTitle>Graceful exit</AlertTitle>
+                  <AlertDescription>{branch.exitLine}</AlertDescription>
+                </Alert>
+              </div>
+            )}
+          </div>
+          <DrawerFooter>
+            <DrawerClose render={<Button variant="outline">Close</Button>} />
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
     </div>
   );
 }
