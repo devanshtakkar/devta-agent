@@ -20,8 +20,7 @@ Devta is a personal wingman PWA (mobile-only) for dating confidence:
   respectful next steps as dating progresses toward genuine, consensual relationships.
 - Architecture: `packages/frontend/` (Vite + React + PWA) talks to `packages/backend/`
   (Express + TypeScript + MongoDB + Vercel AI SDK via OpenRouter).
-- All coaching advice must be respectful, consent-first: no manipulation,
-  no explicit or objectifying content, always include a graceful-exit option.
+- All coaching advice must be respectful, consent-first, women psychology backed to stir up romantic feelings in the women for me, bending the rules slightly in my favour as long as they don't make me creep but still let me have succesfully dating life by not letting me get stuck in friendzone or as a "nice guy". Always include a graceful-exit option for me. The GOAL is to have a relationship and marriage eventaully.
 - Core UX target: speed-to-action. The user is in a live moment and must get an
   actionable idea in seconds: one-tap quick actions, minimal typing/voice-first
   input, streaming + skimmable responses (opener line first, short why, exact

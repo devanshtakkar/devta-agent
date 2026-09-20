@@ -11,6 +11,7 @@ export interface Starter {
   why: string;
   risk: "low" | "medium" | "high";
   nextMove: string;
+  gracefulExit: string;
 }
 
 export interface ApproachInput {

@@ -90,6 +90,10 @@ export function ApproachOptions({
                     <span className="font-semibold">Next: </span>
                     {s.nextMove}
                   </p>
+                  <p className="text-muted-foreground text-[13px] leading-snug">
+                    <span className="font-semibold">Ease out: </span>
+                    {s.gracefulExit}
+                  </p>
                 </CardContent>
                 <CardFooter>
                   <Button size="sm" className="w-full" onClick={() => onUse(s)}>
