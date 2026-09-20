@@ -6,7 +6,7 @@ import { authHandler } from "./auth.js";
 import { env } from "./env.js";
 import { connectDb } from "./db.js";
 import { seedDefaults } from "./services/config.js";
-import coachRouter from "./routes/coach.js";
+import sessionsRouter from "./routes/sessions.js";
 import configRouter from "./routes/config.js";
 
 const app: Express = express();
@@ -24,7 +24,7 @@ app.get("/health", (_req, res) => {
 // the raw Node request itself).
 app.all("/api/auth/*", authHandler);
 
-app.use("/api/coach", coachRouter);
+app.use("/api/sessions", sessionsRouter);
 app.use("/api/config", configRouter);
 
 async function main() {

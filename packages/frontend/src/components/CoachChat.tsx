@@ -1,6 +1,19 @@
 import { useRef, useState } from "react";
+import { useNavigate } from "@tanstack/react-router";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckIcon, ImagePlusIcon, SendIcon, SparklesIcon, TriangleAlertIcon, XIcon } from "lucide-react";
-import { fetchIdeas, fileToDataUrl, type IdeasResponse, type Starter } from "@/lib/api";
+import {
+  createSession,
+  fileToDataUrl,
+  getSession,
+  postTurn,
+  sessionsKeys,
+  type ChatSessionDetail,
+  type IdeasResponse,
+  type PersistedBranch,
+  type PersistedTurn,
+  type Starter,
+} from "@/lib/api";
 import { StarterCarousel } from "@/components/StarterCarousel";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
@@ -33,15 +46,28 @@ import {
 } from "@/components/ui/message-scroller";
 import { Spinner } from "@/components/ui/spinner";
 
-interface Turn {
-  id: number;
+interface UiTurn {
   situation: string;
+  /** Ephemeral photo preview — never persisted. */
   imagePreview?: string;
   ideas?: IdeasResponse;
+  persistedBranches: PersistedBranch[];
   error?: string;
+  pending?: boolean;
+  turnIndex: number;
 }
 
 const QUICK = ["Cafe", "Restaurant", "Street", "Party", "Campus"];
+
+function toUiTurn(t: PersistedTurn, turnIndex: number): UiTurn {
+  return {
+    situation: t.situation,
+    ideas: { overview: t.overview, starters: t.starters },
+    persistedBranches: t.branches ?? [],
+    error: t.error,
+    turnIndex,
+  };
+}
 
 function AiAvatar() {
   return (
@@ -54,14 +80,40 @@ function AiAvatar() {
   );
 }
 
-export function CoachChat() {
+export function CoachChat({ sessionId }: { sessionId: string | null }) {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [situation, setSituation] = useState("");
   const [imageDataUrl, setImageDataUrl] = useState<string | undefined>();
-  const [turns, setTurns] = useState<Turn[]>([]);
+  // The detail route loader warms this cache before first render, so the
+  // initializer below hydrates synchronously with no loading flash.
+  const [turns, setTurns] = useState<UiTurn[]>(() => {
+    if (!sessionId) return [];
+    const cached = queryClient.getQueryData<ChatSessionDetail>(
+      sessionsKeys.detail(sessionId),
+    );
+    return cached?.turns.map(toUiTurn) ?? [];
+  });
   const [loading, setLoading] = useState(false);
   const [used, setUsed] = useState<Starter | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
-  const idRef = useRef(1);
+
+  const detailQuery = useQuery({
+    queryKey: sessionsKeys.detail(sessionId ?? ""),
+    queryFn: () => getSession(sessionId ?? ""),
+    enabled: sessionId !== null,
+    staleTime: 10_000,
+  });
+
+  function refreshListSoon(firstTurn: boolean) {
+    void queryClient.invalidateQueries({ queryKey: sessionsKeys.list });
+    // The AI title lands shortly after the first turn — pick it up.
+    if (firstTurn) {
+      window.setTimeout(() => {
+        void queryClient.invalidateQueries({ queryKey: sessionsKeys.list });
+      }, 8000);
+    }
+  }
 
   async function onPickImage(file: File | undefined) {
     if (!file) return;
@@ -77,21 +129,93 @@ export function CoachChat() {
     const text = (prefill ?? situation).trim();
     if (!text || loading) return;
     setLoading(true);
-    const turn: Turn = { id: idRef.current++, situation: text, imagePreview: imageDataUrl };
-    setTurns((t) => [...t, turn]);
+    // New chat: create the session first, then post the turn, then route to it.
+    if (sessionId === null) {
+      const pending: UiTurn = { situation: text, imagePreview: imageDataUrl, pending: true, persistedBranches: [], turnIndex: 0 };
+      setTurns([pending]);
+      setSituation("");
+      try {
+        const created = await createSession();
+        const { turn } = await postTurn(created.uuid, text, imageDataUrl);
+        setImageDataUrl(undefined);
+        refreshListSoon(true);
+        void navigate({ to: "/s/$sessionId", params: { sessionId: created.uuid } });
+        // The detail route loader fetches the persisted turn; local echo below
+        // is only a fallback in case navigation is slow.
+        setTurns([{ ...toUiTurn(turn, 0), imagePreview: undefined }]);
+      } catch (e) {
+        setTurns([
+          { ...pending, pending: false, error: e instanceof Error ? e.message : "AI failed — try again" },
+        ]);
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
+    const uuid = sessionId;
+    const turnIndex = turns.length;
+    const pending: UiTurn = {
+      situation: text,
+      imagePreview: imageDataUrl,
+      pending: true,
+      persistedBranches: [],
+      turnIndex,
+    };
+    setTurns((t) => [...t, pending]);
     setSituation("");
+    const firstTurn = turnIndex === 0;
     try {
-      const ideas = await fetchIdeas(text, imageDataUrl);
-      setTurns((ts) => ts.map((x) => (x.id === turn.id ? { ...x, ideas } : x)));
+      const { turn } = await postTurn(uuid, text, imageDataUrl);
+      setTurns((ts) =>
+        ts.map((x, i) => (i === turnIndex ? toUiTurn(turn, turnIndex) : x)),
+      );
+      setImageDataUrl(undefined);
+      void queryClient.invalidateQueries({ queryKey: sessionsKeys.detail(uuid) });
+      refreshListSoon(firstTurn);
     } catch (e) {
       setTurns((ts) =>
-        ts.map((x) =>
-          x.id === turn.id ? { ...x, error: e instanceof Error ? e.message : "AI failed — try again" } : x,
+        ts.map((x, i) =>
+          i === turnIndex
+            ? { ...x, pending: false, error: e instanceof Error ? e.message : "AI failed — try again" }
+            : x,
         ),
       );
     } finally {
       setLoading(false);
     }
+  }
+
+  function handleBranched(turnIndex: number, branch: PersistedBranch) {
+    setTurns((ts) =>
+      ts.map((x, i) =>
+        i === turnIndex ? { ...x, persistedBranches: [...x.persistedBranches, branch] } : x,
+      ),
+    );
+    if (sessionId) {
+      void queryClient.invalidateQueries({ queryKey: sessionsKeys.detail(sessionId) });
+    }
+  }
+
+  if (sessionId !== null && detailQuery.isPending && turns.length === 0) {
+    return (
+      <div className="mx-auto flex h-full min-h-0 w-full max-w-md flex-1 items-center justify-center">
+        <p className="text-muted-foreground flex items-center gap-2 text-sm">
+          <Spinner /> Loading chat…
+        </p>
+      </div>
+    );
+  }
+
+  if (sessionId !== null && detailQuery.isError && turns.length === 0) {
+    return (
+      <div className="mx-auto flex h-full min-h-0 w-full max-w-md flex-1 flex-col items-center justify-center gap-3 px-4">
+        <p className="text-sm">Couldn't load this chat.</p>
+        <Button variant="outline" onClick={() => void navigate({ to: "/" })}>
+          Start a new chat
+        </Button>
+      </div>
+    );
   }
 
   return (
@@ -114,8 +238,8 @@ export function CoachChat() {
                   </EmptyHeader>
                 </Empty>
               )}
-              {turns.map((t) => (
-                <MessageScrollerItem key={t.id} messageId={String(t.id)} scrollAnchor>
+              {turns.map((t, i) => (
+                <MessageScrollerItem key={`${sessionId ?? "new"}:${i}`} messageId={`${sessionId ?? "new"}:${i}`} scrollAnchor>
                   <MessageGroup className="gap-3">
                     <Message align="end">
                       <MessageContent>
@@ -140,6 +264,16 @@ export function CoachChat() {
                         <AlertDescription>{t.error}</AlertDescription>
                       </Alert>
                     )}
+                    {t.pending && !t.ideas && !t.error && (
+                      <Message align="start">
+                        <AiAvatar />
+                        <MessageContent>
+                          <p className="text-muted-foreground flex items-center gap-2 px-3.5 text-sm">
+                            <Spinner /> Thinking of openers…
+                          </p>
+                        </MessageContent>
+                      </Message>
+                    )}
                     {t.ideas && (
                       <Message align="start">
                         <AiAvatar />
@@ -147,21 +281,30 @@ export function CoachChat() {
                           <Bubble variant="muted" align="start">
                             <BubbleContent>{t.ideas.overview}</BubbleContent>
                           </Bubble>
-                          <StarterCarousel
-                            situation={t.situation}
-                            starters={t.ideas.starters}
-                            onUse={(s) => {
-                              setUsed(s);
-                              void navigator.clipboard?.writeText(s.openerLine).catch(() => {});
-                            }}
-                          />
+                          {sessionId ? (
+                            <StarterCarousel
+                              starters={t.ideas.starters}
+                              sessionUuid={sessionId}
+                              turnIndex={t.turnIndex}
+                              persistedBranches={t.persistedBranches}
+                              onBranched={(b) => handleBranched(i, b)}
+                              onUse={(s) => {
+                                setUsed(s);
+                                void navigator.clipboard?.writeText(s.openerLine).catch(() => {});
+                              }}
+                            />
+                          ) : (
+                            <p className="text-muted-foreground px-3.5 text-sm">
+                              Saving chat…
+                            </p>
+                          )}
                         </MessageContent>
                       </Message>
                     )}
                   </MessageGroup>
                 </MessageScrollerItem>
               ))}
-              {loading && (
+              {loading && sessionId !== null && (
                 <MessageScrollerItem messageId="thinking">
                   <Message align="start">
                     <AiAvatar />

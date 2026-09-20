@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { CheckIcon, GitBranchIcon, TriangleAlertIcon } from "lucide-react";
-import { fetchBranch, type BranchResponse, type Starter } from "@/lib/api";
+import { postBranch, type BranchResponse, type PersistedBranch, type Starter } from "@/lib/api";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Bubble, BubbleContent } from "@/components/ui/bubble";
 import { Button } from "@/components/ui/button";
@@ -25,12 +25,18 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 
 export function StarterCarousel({
-  situation,
   starters,
+  sessionUuid,
+  turnIndex,
+  persistedBranches = [],
+  onBranched,
   onUse,
 }: {
-  situation: string;
   starters: Starter[];
+  sessionUuid: string;
+  turnIndex: number;
+  persistedBranches?: PersistedBranch[];
+  onBranched?: (branch: PersistedBranch) => void;
   onUse: (s: Starter) => void;
 }) {
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -46,8 +52,9 @@ export function StarterCarousel({
     setError(null);
     setLoading(true);
     try {
-      const res = await fetchBranch(situation, starter);
+      const res = await postBranch(sessionUuid, turnIndex, starter);
       setBranch(res);
+      onBranched?.({ ...res, createdAt: new Date().toISOString() });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Branch failed");
     } finally {
@@ -146,6 +153,20 @@ export function StarterCarousel({
                   <AlertTitle>Graceful exit</AlertTitle>
                   <AlertDescription>{branch.exitLine}</AlertDescription>
                 </Alert>
+              </div>
+            )}
+            {!loading && !branch && persistedBranches.length > 0 && (
+              <div className="flex flex-col gap-2">
+                <p className="text-muted-foreground text-xs font-medium">
+                  Earlier branches in this chat
+                </p>
+                {persistedBranches.map((b, i) => (
+                  <Alert key={`${b.createdAt}-${i}`}>
+                    <AlertDescription>
+                      {b.scenarios.length} replies saved · Exit: “{b.exitLine}”
+                    </AlertDescription>
+                  </Alert>
+                ))}
               </div>
             )}
           </div>

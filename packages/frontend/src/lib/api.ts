@@ -25,26 +25,97 @@ export interface BranchResponse {
   exitLine: string;
 }
 
-async function request<T>(path: string, body: unknown): Promise<T> {
+export interface PersistedBranch extends BranchResponse {
+  starterId?: string;
+  createdAt: string;
+}
+
+export interface PersistedTurn {
+  situation: string;
+  overview: string;
+  starters: Starter[];
+  branches: PersistedBranch[];
+  error?: string;
+  createdAt: string;
+}
+
+export interface SessionListItem {
+  uuid: string;
+  title: string;
+  updatedAt: string;
+  createdAt: string;
+  turnCount: number;
+  preview: string;
+}
+
+export interface ChatSessionDetail {
+  uuid: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  turns: PersistedTurn[];
+}
+
+export const sessionsKeys = {
+  all: ["sessions"] as const,
+  list: ["sessions", "list"] as const,
+  detail: (uuid: string) => ["sessions", "detail", uuid] as const,
+};
+
+async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, {
-    method: "POST",
     credentials: "include",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+    ...init,
   });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
     throw new Error(text || `Request failed: ${res.status}`);
   }
+  if (res.status === 204) return undefined as T;
   return (await res.json()) as T;
 }
 
-export function fetchIdeas(situation: string, imageDataUrl?: string) {
-  return request<IdeasResponse>("/api/coach/ideas", { situation, imageDataUrl });
+export function listSessions() {
+  return apiFetch<{ sessions: SessionListItem[] }>("/api/sessions").then((d) => d.sessions);
 }
 
-export function fetchBranch(situation: string, starter: Starter, herResponse?: string) {
-  return request<BranchResponse>("/api/coach/branch", { situation, starter, herResponse });
+export function getSession(uuid: string) {
+  return apiFetch<ChatSessionDetail>(`/api/sessions/${uuid}`);
+}
+
+export function createSession() {
+  return apiFetch<SessionListItem>("/api/sessions", { method: "POST" });
+}
+
+export function renameSession(uuid: string, title: string) {
+  return apiFetch<{ uuid: string; title: string }>(`/api/sessions/${uuid}`, {
+    method: "PATCH",
+    body: JSON.stringify({ title }),
+  });
+}
+
+export function deleteSession(uuid: string) {
+  return apiFetch<void>(`/api/sessions/${uuid}`, { method: "DELETE" });
+}
+
+export function postTurn(uuid: string, situation: string, imageDataUrl?: string) {
+  return apiFetch<{ turnIndex: number; turn: PersistedTurn }>(`/api/sessions/${uuid}/turns`, {
+    method: "POST",
+    body: JSON.stringify({ situation, imageDataUrl }),
+  });
+}
+
+export function postBranch(
+  uuid: string,
+  turnIndex: number,
+  starter: Starter | string,
+  herResponse?: string,
+) {
+  return apiFetch<BranchResponse>(`/api/sessions/${uuid}/branches`, {
+    method: "POST",
+    body: JSON.stringify({ turnIndex, starter, herResponse }),
+  });
 }
 
 /** Downscale an image file to a compact JPEG data URL for AI context. */
