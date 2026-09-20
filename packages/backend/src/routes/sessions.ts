@@ -1,12 +1,17 @@
 import { Router, type Request, type Response } from "express";
 import { randomUUID } from "node:crypto";
-import { generateObject } from "ai";
+import {
+  convertToModelMessages,
+  generateObject,
+  streamText,
+  type UIMessage,
+} from "ai";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { z } from "zod";
 import { requireAuth } from "../auth.js";
 import { env } from "../env.js";
 import { getConfig } from "../services/config.js";
-import { SYSTEM_PROMPT, branchSchema, starterSchema } from "../ai/coach.js";
+import { SYSTEM_PROMPT, chatTools } from "../ai/coach.js";
 import { ChatSession } from "../models/ChatSession.js";
 
 const router: Router = Router();
@@ -17,28 +22,27 @@ const renameBodySchema = z.object({
   title: z.string().trim().min(1, "title is required").max(80),
 });
 
-const turnBodySchema = z.object({
-  situation: z.string().trim().min(1, "situation is required").max(2000),
-  imageDataUrl: z
-    .string()
-    .regex(/^data:image\/[a-zA-Z0-9.+-]+;base64,/, "must be a data:image/...;base64 URL")
-    .optional(),
+const messagePartSchema = z.object({ type: z.string() }).passthrough();
+
+const uiMessageSchema = z.object({
+  id: z.string().optional(),
+  role: z.enum(["system", "user", "assistant"]),
+  parts: z.array(messagePartSchema),
+  metadata: z.unknown().optional(),
 });
 
-const branchBodySchema = z.object({
-  turnIndex: z.number().int().min(0),
-  starter: z.union([
-    z.string().min(1).max(1000),
-    z
-      .object({ id: z.string().optional(), openerLine: z.string().min(1).max(1000) })
-      .passthrough(),
-  ]),
-  herResponse: z.string().max(1000).optional(),
+const chatBodySchema = z.object({
+  messages: z.array(uiMessageSchema).min(1, "messages are required"),
+  intent: z.enum(["approaches"]).optional(),
 });
 
 const titleSchema = z.object({
   title: z.string().describe("Short chat title, 5 words max, no quotes or emoji."),
 });
+
+const MAX_MESSAGES = 100;
+
+type StoredMessage = z.infer<typeof uiMessageSchema>;
 
 function getUserId(req: Request): string {
   const user = (req as Request & { user?: { id?: unknown; _id?: unknown } }).user;
@@ -54,68 +58,88 @@ async function resolveModel(): Promise<string> {
   }
 }
 
-interface LeanListTurn {
-  situation: string;
-}
-
-interface LeanListDoc {
-  uuid: string;
-  title: string;
-  turns: LeanListTurn[];
-  updatedAt: Date;
-  createdAt: Date;
-}
-
-interface LeanDetailStarter {
-  id: string;
-  title: string;
-  openerLine: string;
-  why: string;
-  risk: "low" | "medium" | "high";
-  nextMove: string;
-}
-
-interface LeanDetailBranch {
-  starterId?: string;
-  scenarios: { herResponse: string; yourReply: string; tip: string }[];
-  exitLine: string;
-  createdAt: Date;
-}
-
-interface LeanDetailTurn {
-  situation: string;
-  overview: string;
-  starters: LeanDetailStarter[];
-  branches: LeanDetailBranch[];
-  error?: string;
-  createdAt: Date;
-}
-
-interface LeanDetailDoc {
-  uuid: string;
-  title: string;
-  turns: LeanDetailTurn[];
-  createdAt: Date;
-  updatedAt: Date;
-}
-
 function iso(d: Date | string): string {
   return d instanceof Date ? d.toISOString() : new Date(d).toISOString();
 }
 
-function toListItem(doc: LeanListDoc) {
-  const last = doc.turns[doc.turns.length - 1];
+/** Stored/streamed messages need a stable, non-empty id. */
+function normalizeMessages(messages: StoredMessage[]): StoredMessage[] {
+  const seen = new Set<string>();
+  return messages.map((m) => {
+    const id = (m.id ?? "").trim();
+    const next = id && !seen.has(id) ? id : `m-${randomUUID()}`;
+    seen.add(next);
+    return { ...m, id: next };
+  });
+}
+
+function messageText(message: Pick<StoredMessage, "parts">): string {
+  return (message.parts ?? [])
+    .filter((p) => p.type === "text" && typeof p.text === "string")
+    .map((p) => String((p as { text?: unknown }).text ?? ""))
+    .join(" ")
+    .trim();
+}
+
+/** Persist without ephemeral parts (images are context-only; reasoning is transient). */
+function toStoredMessage(message: UIMessage): StoredMessage {
+  return {
+    id: message.id,
+    role: message.role,
+    parts: (message.parts ?? []).filter(
+      (p) => p.type !== "file" && p.type !== "reasoning",
+    ),
+    metadata: message.metadata,
+  };
+}
+
+/**
+ * Reasoning is turn-local, so drop it before the model call. Doing so can
+ * leave a tool-only assistant turn empty (tool parts with no result are also
+ * dropped during conversion), which providers reject — so drop those too.
+ */
+function forModel(messages: UIMessage[]): UIMessage[] {
+  const out: UIMessage[] = [];
+  for (const message of messages) {
+    if (message.role !== "assistant") {
+      out.push(message);
+      continue;
+    }
+    const parts = (message.parts ?? []).filter((p) => p.type !== "reasoning");
+    const hasContent = parts.some((p) => {
+      if (p.type === "text") return Boolean((p as { text?: string }).text?.trim());
+      if (p.type === "file") return true;
+      const tool = p as { type: string; state?: string };
+      if (tool.type === "dynamic-tool" || tool.type.startsWith("tool-")) {
+        return tool.state === "output-available" || tool.state === "output-error";
+      }
+      return false;
+    });
+    if (hasContent) out.push({ ...message, parts });
+  }
+  return out;
+}
+
+function toListItem(doc: {
+  uuid: string;
+  title: string;
+  messages: StoredMessage[];
+  updatedAt: Date;
+  createdAt: Date;
+}) {
+  const messages = doc.messages ?? [];
+  const lastUser = [...messages].reverse().find((m) => m.role === "user");
   return {
     uuid: doc.uuid,
     title: doc.title,
     updatedAt: iso(doc.updatedAt),
     createdAt: iso(doc.createdAt),
-    turnCount: doc.turns.length,
-    preview: last ? last.situation.slice(0, 80) : "",
+    messageCount: messages.length,
+    preview: lastUser ? messageText(lastUser).slice(0, 80) : "",
   };
 }
 
-/** Fire-and-forget AI title for the first turn; never throws. */
+/** Fire-and-forget AI title for the first message; never throws. */
 function refreshTitleIfDefault(sessionId: unknown, situation: string) {
   void (async () => {
     try {
@@ -145,11 +169,16 @@ function refreshTitleIfDefault(sessionId: unknown, situation: string) {
 
 router.post("/", requireAuth, async (req: Request, res: Response) => {
   const userId = getUserId(req);
-  const doc = await ChatSession.create({ uuid: randomUUID(), userId, title: "New chat", turns: [] });
+  const doc = await ChatSession.create({
+    uuid: randomUUID(),
+    userId,
+    title: "New chat",
+    messages: [],
+  });
   return res.status(201).json({
     uuid: doc.uuid,
     title: doc.title,
-    turnCount: 0,
+    messageCount: 0,
     preview: "",
     createdAt: doc.createdAt.toISOString(),
     updatedAt: doc.updatedAt.toISOString(),
@@ -161,33 +190,32 @@ router.get("/", requireAuth, async (req: Request, res: Response) => {
   const docs = await ChatSession.find({ userId })
     .sort({ updatedAt: -1 })
     .limit(100)
-    .lean<LeanListDoc[]>();
+    .lean<
+      {
+        uuid: string;
+        title: string;
+        messages: StoredMessage[];
+        updatedAt: Date;
+        createdAt: Date;
+      }[]
+    >();
   return res.json({ sessions: docs.map(toListItem) });
 });
 
 router.get("/:uuid", requireAuth, async (req: Request, res: Response) => {
   const parsed = uuidParamSchema.safeParse(req.params);
   if (!parsed.success) return res.status(400).json({ error: "Invalid session id" });
-  const doc = await ChatSession.findOne({ uuid: parsed.data.uuid, userId: getUserId(req) }).lean<LeanDetailDoc | null>();
+  const doc = await ChatSession.findOne({
+    uuid: parsed.data.uuid,
+    userId: getUserId(req),
+  }).lean<{ uuid: string; title: string; messages: StoredMessage[]; createdAt: Date; updatedAt: Date } | null>();
   if (!doc) return res.status(404).json({ error: "Session not found" });
   return res.json({
     uuid: doc.uuid,
     title: doc.title,
     createdAt: iso(doc.createdAt),
     updatedAt: iso(doc.updatedAt),
-    turns: doc.turns.map((t) => ({
-      situation: t.situation,
-      overview: t.overview,
-      starters: t.starters,
-      branches: (t.branches ?? []).map((b) => ({
-        starterId: b.starterId,
-        scenarios: b.scenarios,
-        exitLine: b.exitLine,
-        createdAt: iso(b.createdAt),
-      })),
-      error: t.error,
-      createdAt: iso(t.createdAt),
-    })),
+    messages: normalizeMessages(doc.messages ?? []),
   });
 });
 
@@ -210,113 +238,76 @@ router.patch("/:uuid", requireAuth, async (req: Request, res: Response) => {
 router.delete("/:uuid", requireAuth, async (req: Request, res: Response) => {
   const parsed = uuidParamSchema.safeParse(req.params);
   if (!parsed.success) return res.status(400).json({ error: "Invalid session id" });
-  const result = await ChatSession.deleteOne({ uuid: parsed.data.uuid, userId: getUserId(req) });
+  const result = await ChatSession.deleteOne({
+    uuid: parsed.data.uuid,
+    userId: getUserId(req),
+  });
   if (result.deletedCount === 0) return res.status(404).json({ error: "Session not found" });
   return res.status(204).end();
 });
 
-router.post("/:uuid/turns", requireAuth, async (req: Request, res: Response) => {
+router.post("/:uuid/chat", requireAuth, async (req: Request, res: Response) => {
   const parsedParam = uuidParamSchema.safeParse(req.params);
   if (!parsedParam.success) return res.status(400).json({ error: "Invalid session id" });
-  const parsedBody = turnBodySchema.safeParse(req.body);
+  const parsedBody = chatBodySchema.safeParse(req.body);
   if (!parsedBody.success) {
+    console.error("Invalid chat body:", JSON.stringify(parsedBody.error.flatten()));
     return res.status(400).json({ error: "Invalid request", details: parsedBody.error.flatten() });
   }
+
   const session = await ChatSession.findOne({
     uuid: parsedParam.data.uuid,
     userId: getUserId(req),
   });
   if (!session) return res.status(404).json({ error: "Session not found" });
-  if (session.turns.length >= 50) {
-    return res.status(400).json({ error: "Session is full (50 turns max)" });
+  if (parsedBody.data.messages.length > MAX_MESSAGES) {
+    return res.status(400).json({ error: `Session is full (${MAX_MESSAGES} messages max)` });
   }
 
-  const { situation, imageDataUrl } = parsedBody.data;
+  const incoming = normalizeMessages(parsedBody.data.messages) as UIMessage[];
+  const intent = parsedBody.data.intent;
+  const isFirstUserMessage = (session.messages?.length ?? 0) === 0;
+
   try {
     const openrouter = createOpenRouter({ apiKey: env.OPENROUTER_API_KEY });
-    const { object } = await generateObject({
+    const result = streamText({
       model: openrouter(await resolveModel()),
-      schema: starterSchema,
       system: SYSTEM_PROMPT,
-      messages: [
-        {
-          role: "user",
-          content: imageDataUrl
-            ? [
-                { type: "text" as const, text: situation },
-                { type: "image" as const, image: imageDataUrl },
-              ]
-            : [{ type: "text" as const, text: situation }],
-        },
-      ],
+      tools: chatTools,
+      toolChoice:
+        intent === "approaches"
+          ? { type: "tool", toolName: "proposeApproaches" }
+          : "none",
+      messages: convertToModelMessages(forModel(incoming)),
+      providerOptions: { openrouter: { reasoning: { enabled: true } } },
     });
-    // Images are ephemeral context only — never persisted.
-    session.turns.push({
-      situation,
-      overview: object.overview,
-      starters: object.starters,
-      branches: [],
-    });
-    await session.save();
-    if (session.turns.length === 1) refreshTitleIfDefault(session._id, situation);
-    const turn = session.turns[session.turns.length - 1];
-    return res.status(201).json({
-      turnIndex: session.turns.length - 1,
-      turn: {
-        situation: turn.situation,
-        overview: turn.overview,
-        starters: turn.starters,
-        branches: [],
-        createdAt: new Date().toISOString(),
+
+    result.pipeUIMessageStreamToResponse(res, {
+      originalMessages: incoming,
+      sendReasoning: true,
+      onFinish: async ({ messages }) => {
+        try {
+          const stored = messages.map(toStoredMessage);
+          await ChatSession.updateOne(
+            { _id: session._id },
+            { $set: { messages: stored } },
+          );
+        } catch (err) {
+          console.error("Failed to persist chat messages:", err);
+        }
       },
     });
-  } catch (err) {
-    console.error("POST /api/sessions/:uuid/turns failed:", err);
-    return res.status(502).json({ error: "AI request failed" });
-  }
-});
 
-router.post("/:uuid/branches", requireAuth, async (req: Request, res: Response) => {
-  const parsedParam = uuidParamSchema.safeParse(req.params);
-  if (!parsedParam.success) return res.status(400).json({ error: "Invalid session id" });
-  const parsedBody = branchBodySchema.safeParse(req.body);
-  if (!parsedBody.success) {
-    return res.status(400).json({ error: "Invalid request", details: parsedBody.error.flatten() });
-  }
-  const session = await ChatSession.findOne({
-    uuid: parsedParam.data.uuid,
-    userId: getUserId(req),
-  });
-  if (!session) return res.status(404).json({ error: "Session not found" });
-  const turn = session.turns[parsedBody.data.turnIndex];
-  if (!turn) return res.status(404).json({ error: "Turn not found" });
-
-  const starter = parsedBody.data.starter;
-  const starterLine = typeof starter === "string" ? starter : starter.openerLine;
-  const starterId = typeof starter === "string" ? undefined : starter.id;
-  const { herResponse } = parsedBody.data;
-  const prompt = herResponse
-    ? `Situation: ${turn.situation}\nChosen opener: ${starterLine}\nShe responded: ${herResponse}\nSuggest 3 ways this could go next, plus a graceful exit line.`
-    : `Situation: ${turn.situation}\nChosen opener: ${starterLine}\nSuggest 3 plausible ways she might respond and what to say next, plus a graceful exit line.`;
-  try {
-    const openrouter = createOpenRouter({ apiKey: env.OPENROUTER_API_KEY });
-    const { object } = await generateObject({
-      model: openrouter(await resolveModel()),
-      schema: branchSchema,
-      system: SYSTEM_PROMPT,
-      messages: [{ role: "user", content: [{ type: "text" as const, text: prompt }] }],
-    });
-    turn.branches.push({
-      starterId,
-      scenarios: object.scenarios,
-      exitLine: object.exitLine,
-      createdAt: new Date(),
-    });
-    await session.save();
-    return res.status(201).json(object);
+    if (isFirstUserMessage) {
+      const first = incoming.find((m) => m.role === "user");
+      const text = first ? messageText(toStoredMessage(first)) : "";
+      if (text) refreshTitleIfDefault(session._id, text);
+    }
   } catch (err) {
-    console.error("POST /api/sessions/:uuid/branches failed:", err);
-    return res.status(502).json({ error: "AI request failed" });
+    console.error("POST /api/sessions/:uuid/chat failed:", err);
+    if (!res.headersSent) {
+      return res.status(502).json({ error: "AI request failed" });
+    }
   }
 });
 

@@ -1,21 +1,31 @@
-import { useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { FileUIPart, ReasoningUIPart, TextUIPart } from "ai";
+import { useChat } from "@ai-sdk/react";
 import { useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckIcon, SendIcon, SparklesIcon, TriangleAlertIcon, XIcon } from "lucide-react";
 import {
+  SendIcon,
+  SparklesIcon,
+  SquareIcon,
+  TriangleAlertIcon,
+  XIcon,
+} from "lucide-react";
+import {
+  chatTransport,
   createSession,
   fileToDataUrl,
   getSession,
-  postTurn,
   sessionsKeys,
+  type ApproachToolPart,
+  type ChatMessage,
   type ChatSessionDetail,
-  type IdeasResponse,
-  type PersistedBranch,
-  type PersistedTurn,
   type Starter,
 } from "@/lib/api";
-import { StarterCarousel } from "@/components/StarterCarousel";
+import { setPendingDraft, takePendingDraft } from "@/lib/pending-draft";
+import { ApproachOptions } from "@/components/ApproachOptions";
 import { ComposerMenu } from "@/components/ComposerMenu";
+import { Response } from "@/components/Response";
+import { Thinking } from "@/components/Thinking";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Attachment,
@@ -35,7 +45,6 @@ import {
   InputGroupButton,
   InputGroupTextarea,
 } from "@/components/ui/input-group";
-import { Marker, MarkerContent, MarkerIcon } from "@/components/ui/marker";
 import { Message, MessageAvatar, MessageContent, MessageGroup } from "@/components/ui/message";
 import {
   MessageScroller,
@@ -47,28 +56,10 @@ import {
 } from "@/components/ui/message-scroller";
 import { Spinner } from "@/components/ui/spinner";
 
-interface UiTurn {
-  situation: string;
-  /** Ephemeral photo preview — never persisted. */
-  imagePreview?: string;
-  ideas?: IdeasResponse;
-  persistedBranches: PersistedBranch[];
-  error?: string;
-  pending?: boolean;
-  turnIndex: number;
-}
-
 const QUICK = ["Cafe", "Restaurant", "Street", "Party", "Campus"];
 
-function toUiTurn(t: PersistedTurn, turnIndex: number): UiTurn {
-  return {
-    situation: t.situation,
-    ideas: { overview: t.overview, starters: t.starters },
-    persistedBranches: t.branches ?? [],
-    error: t.error,
-    turnIndex,
-  };
-}
+const APPROACH_PROMPT =
+  "Give me 5 concrete approaches for what to do right now, based on our conversation.";
 
 function AiAvatar() {
   return (
@@ -81,23 +72,104 @@ function AiAvatar() {
   );
 }
 
+function imagePart(dataUrl: string): FileUIPart {
+  return { type: "file", mediaType: "image/jpeg", url: dataUrl, filename: "scene.jpg" };
+}
+
+function UserParts({ message }: { message: ChatMessage }) {
+  return (
+    <>
+      {message.parts.map((part, i) => {
+        if (part.type === "text") {
+          return (
+            <Bubble key={i} variant="default" align="end">
+              <BubbleContent>{(part as TextUIPart).text}</BubbleContent>
+            </Bubble>
+          );
+        }
+        if (part.type === "file" && (part as FileUIPart).mediaType?.startsWith("image/")) {
+          return (
+            <Attachment key={i} state="done" size="sm" className="self-end">
+              <AttachmentMedia variant="image">
+                <img src={(part as FileUIPart).url} alt="scene context" />
+              </AttachmentMedia>
+              <AttachmentContent>
+                <AttachmentTitle>Scene photo</AttachmentTitle>
+              </AttachmentContent>
+            </Attachment>
+          );
+        }
+        return null;
+      })}
+    </>
+  );
+}
+
+function AssistantParts({
+  message,
+  onUse,
+}: {
+  message: ChatMessage;
+  onUse: (starter: Starter) => void;
+}) {
+  const reasoning = message.parts.filter(
+    (p) => p.type === "reasoning",
+  ) as ReasoningUIPart[];
+  const reasoningText = reasoning.map((r) => r.text).join("\n").trim();
+  const reasoningStreaming = reasoning.some((r) => r.state === "streaming");
+
+  const tools = message.parts.filter(
+    (p) => p.type === "tool-proposeApproaches",
+  ) as unknown as ApproachToolPart[];
+
+  const text = message.parts
+    .filter((p) => p.type === "text")
+    .map((p) => (p as TextUIPart).text)
+    .join("");
+
+  return (
+    <>
+      {(reasoningText || reasoningStreaming) && (
+        <Thinking text={reasoningText} streaming={reasoningStreaming} />
+      )}
+      {tools.map((tool) => (
+        <ApproachOptions key={tool.toolCallId} part={tool} onUse={onUse} />
+      ))}
+      {text.trim() && (
+        <Bubble variant="muted" align="start">
+          <BubbleContent>
+            <Response>{text}</Response>
+          </BubbleContent>
+        </Bubble>
+      )}
+    </>
+  );
+}
+
 export function CoachChat({ sessionId }: { sessionId: string | null }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [situation, setSituation] = useState("");
   const [imageDataUrl, setImageDataUrl] = useState<string | undefined>();
-  // The detail route loader warms this cache before first render, so the
-  // initializer below hydrates synchronously with no loading flash.
-  const [turns, setTurns] = useState<UiTurn[]>(() => {
+  const [creating, setCreating] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const firstMessageRef = useRef(false);
+
+  // Hydrate synchronously from the route loader's warmed cache.
+  const [initialMessages] = useState<ChatMessage[]>(() => {
     if (!sessionId) return [];
     const cached = queryClient.getQueryData<ChatSessionDetail>(
       sessionsKeys.detail(sessionId),
     );
-    return cached?.turns.map(toUiTurn) ?? [];
+    return cached?.messages ?? [];
   });
-  const [loading, setLoading] = useState(false);
-  const [used, setUsed] = useState<Starter | null>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
+  firstMessageRef.current = initialMessages.length === 0;
+
+  const transport = useMemo(
+    () => (sessionId ? chatTransport(sessionId) : undefined),
+    [sessionId],
+  );
 
   const detailQuery = useQuery({
     queryKey: sessionsKeys.detail(sessionId ?? ""),
@@ -106,99 +178,103 @@ export function CoachChat({ sessionId }: { sessionId: string | null }) {
     staleTime: 10_000,
   });
 
-  function refreshListSoon(firstTurn: boolean) {
-    void queryClient.invalidateQueries({ queryKey: sessionsKeys.list });
-    // The AI title lands shortly after the first turn — pick it up.
-    if (firstTurn) {
-      window.setTimeout(() => {
-        void queryClient.invalidateQueries({ queryKey: sessionsKeys.list });
-      }, 8000);
-    }
-  }
+  const { messages, sendMessage, status, error, stop, regenerate } = useChat({
+    id: sessionId ?? "new",
+    messages: initialMessages,
+    transport,
+    onFinish: () => {
+      if (sessionId) {
+        void queryClient.invalidateQueries({ queryKey: sessionsKeys.detail(sessionId) });
+      }
+      void queryClient.invalidateQueries({ queryKey: sessionsKeys.list });
+      if (firstMessageRef.current) {
+        firstMessageRef.current = false;
+        window.setTimeout(() => {
+          void queryClient.invalidateQueries({ queryKey: sessionsKeys.list });
+        }, 8000);
+      }
+    },
+  });
+
+  // Fire the first message of a brand-new chat after it has been routed.
+  useEffect(() => {
+    if (!sessionId) return;
+    const draft = takePendingDraft();
+    if (!draft) return;
+    const files = draft.imageDataUrl ? [imagePart(draft.imageDataUrl)] : undefined;
+    void sendMessage({ text: draft.text, files });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId]);
+
+  const busy = status === "submitted" || status === "streaming";
 
   async function onPickImage(file: File | undefined) {
     if (!file) return;
     try {
-      const dataUrl = await fileToDataUrl(file);
-      setImageDataUrl(dataUrl);
+      setImageDataUrl(await fileToDataUrl(file));
     } catch {
       // ignore — text-only fallback
     }
   }
 
+  function send(files?: FileUIPart[]) {
+    void sendMessage(
+      files && files.length > 0 ? { text: situation.trim(), files } : { text: situation.trim() },
+    );
+  }
+
   async function submit(prefill?: string) {
     const text = (prefill ?? situation).trim();
-    if (!text || loading) return;
-    setLoading(true);
-    // New chat: create the session first, then post the turn, then route to it.
+    if (!text || busy || creating) return;
+
     if (sessionId === null) {
-      const pending: UiTurn = { situation: text, imagePreview: imageDataUrl, pending: true, persistedBranches: [], turnIndex: 0 };
-      setTurns([pending]);
-      setSituation("");
+      setCreating(true);
       try {
         const created = await createSession();
-        const { turn } = await postTurn(created.uuid, text, imageDataUrl);
+        queryClient.setQueryData<ChatSessionDetail>(sessionsKeys.detail(created.uuid), {
+          uuid: created.uuid,
+          title: created.title,
+          createdAt: created.createdAt,
+          updatedAt: created.updatedAt,
+          messages: [],
+        });
+        setPendingDraft({ text, imageDataUrl });
+        setSituation("");
         setImageDataUrl(undefined);
-        refreshListSoon(true);
-        void navigate({ to: "/s/$sessionId", params: { sessionId: created.uuid } });
-        // The detail route loader fetches the persisted turn; local echo below
-        // is only a fallback in case navigation is slow.
-        setTurns([{ ...toUiTurn(turn, 0), imagePreview: undefined }]);
-      } catch (e) {
-        setTurns([
-          { ...pending, pending: false, error: e instanceof Error ? e.message : "AI failed — try again" },
-        ]);
+        void navigate({
+          to: "/s/$sessionId",
+          params: { sessionId: created.uuid },
+          replace: true,
+        });
+      } catch {
+        // Leave the composer intact so the user can retry.
       } finally {
-        setLoading(false);
+        setCreating(false);
       }
       return;
     }
 
-    const uuid = sessionId;
-    const turnIndex = turns.length;
-    const pending: UiTurn = {
-      situation: text,
-      imagePreview: imageDataUrl,
-      pending: true,
-      persistedBranches: [],
-      turnIndex,
-    };
-    setTurns((t) => [...t, pending]);
+    const files = imageDataUrl ? [imagePart(imageDataUrl)] : undefined;
     setSituation("");
-    const firstTurn = turnIndex === 0;
-    try {
-      const { turn } = await postTurn(uuid, text, imageDataUrl);
-      setTurns((ts) =>
-        ts.map((x, i) => (i === turnIndex ? toUiTurn(turn, turnIndex) : x)),
-      );
-      setImageDataUrl(undefined);
-      void queryClient.invalidateQueries({ queryKey: sessionsKeys.detail(uuid) });
-      refreshListSoon(firstTurn);
-    } catch (e) {
-      setTurns((ts) =>
-        ts.map((x, i) =>
-          i === turnIndex
-            ? { ...x, pending: false, error: e instanceof Error ? e.message : "AI failed — try again" }
-            : x,
-        ),
-      );
-    } finally {
-      setLoading(false);
-    }
+    setImageDataUrl(undefined);
+    send(files);
   }
 
-  function handleBranched(turnIndex: number, branch: PersistedBranch) {
-    setTurns((ts) =>
-      ts.map((x, i) =>
-        i === turnIndex ? { ...x, persistedBranches: [...x.persistedBranches, branch] } : x,
-      ),
-    );
-    if (sessionId) {
-      void queryClient.invalidateQueries({ queryKey: sessionsKeys.detail(sessionId) });
-    }
+  function requestApproaches() {
+    if (!sessionId || busy || messages.length === 0) return;
+    void sendMessage({ text: APPROACH_PROMPT }, { body: { intent: "approaches" } });
   }
 
-  if (sessionId !== null && detailQuery.isPending && turns.length === 0) {
+  function useStarter(starter: Starter) {
+    setSituation(`I like this opener: “${starter.openerLine}”. Here's what happened: `);
+    textareaRef.current?.focus();
+  }
+
+  const last = messages[messages.length - 1];
+  const showWorking =
+    busy && (!last || last.role !== "assistant" || last.parts.length === 0);
+
+  if (sessionId !== null && detailQuery.isPending && messages.length === 0) {
     return (
       <div className="mx-auto flex h-full min-h-0 w-full max-w-md flex-1 items-center justify-center">
         <p className="text-muted-foreground flex items-center gap-2 text-sm">
@@ -208,7 +284,7 @@ export function CoachChat({ sessionId }: { sessionId: string | null }) {
     );
   }
 
-  if (sessionId !== null && detailQuery.isError && turns.length === 0) {
+  if (sessionId !== null && detailQuery.isError && messages.length === 0) {
     return (
       <div className="mx-auto flex h-full min-h-0 w-full max-w-md flex-1 flex-col items-center justify-center gap-3 px-4">
         <p className="text-sm">Couldn't load this chat.</p>
@@ -224,118 +300,78 @@ export function CoachChat({ sessionId }: { sessionId: string | null }) {
       <div className="mx-auto flex h-full min-h-0 w-full max-w-md flex-1 flex-col">
         <MessageScroller className="min-h-0 flex-1">
           <MessageScrollerViewport>
-            <MessageScrollerContent className="gap-4 px-4 pt-4 pb-4">
-              {turns.length === 0 && (
+            <MessageScrollerContent
+              className="gap-4 px-4 pt-4 pb-4"
+              aria-busy={busy}
+            >
+              {messages.length === 0 && (
                 <Empty>
                   <EmptyHeader>
                     <EmptyMedia variant="icon">
                       <SparklesIcon />
                     </EmptyMedia>
-                    <EmptyTitle>Where are you right now?</EmptyTitle>
+                    <EmptyTitle>Your wingman is here</EmptyTitle>
                     <EmptyDescription>
-                      Describe the scene in one line. Add a photo for extra context. Get 4–5
-                      openers in seconds — swipe, branch, act.
+                      Tell me the scene or ask anything about the moment. When you want
+                      ready-to-use options, tap + for approach options.
                     </EmptyDescription>
                   </EmptyHeader>
                 </Empty>
               )}
-              {turns.map((t, i) => (
-                <MessageScrollerItem key={`${sessionId ?? "new"}:${i}`} messageId={`${sessionId ?? "new"}:${i}`} scrollAnchor>
+
+              {messages.map((m, i) => (
+                <MessageScrollerItem
+                  key={m.id}
+                  messageId={m.id}
+                  scrollAnchor={m.role === "user" || i === 0}
+                >
                   <MessageGroup className="gap-3">
-                    <Message align="end">
+                    <Message align={m.role === "user" ? "end" : "start"}>
+                      {m.role === "assistant" && <AiAvatar />}
                       <MessageContent>
-                        <Bubble variant="default" align="end">
-                          <BubbleContent>{t.situation}</BubbleContent>
-                        </Bubble>
-                        {t.imagePreview && (
-                          <Attachment state="done" size="sm">
-                            <AttachmentMedia variant="image">
-                              <img src={t.imagePreview} alt="scene context" />
-                            </AttachmentMedia>
-                            <AttachmentContent>
-                              <AttachmentTitle>Scene photo</AttachmentTitle>
-                            </AttachmentContent>
-                          </Attachment>
+                        {m.role === "user" ? (
+                          <UserParts message={m} />
+                        ) : (
+                          <AssistantParts message={m} onUse={useStarter} />
                         )}
                       </MessageContent>
                     </Message>
-                    {t.error && (
-                      <Alert variant="destructive">
-                        <TriangleAlertIcon />
-                        <AlertDescription>{t.error}</AlertDescription>
-                      </Alert>
-                    )}
-                    {t.pending && !t.ideas && !t.error && (
-                      <Message align="start">
-                        <AiAvatar />
-                        <MessageContent>
-                          <p className="text-muted-foreground flex items-center gap-2 px-3.5 text-sm">
-                            <Spinner /> Thinking of openers…
-                          </p>
-                        </MessageContent>
-                      </Message>
-                    )}
-                    {t.ideas && (
-                      <Message align="start">
-                        <MessageContent>
-                          <Bubble variant="muted" align="start">
-                            <BubbleContent>{t.ideas.overview}</BubbleContent>
-                          </Bubble>
-                          {sessionId ? (
-                            <StarterCarousel
-                              starters={t.ideas.starters}
-                              sessionUuid={sessionId}
-                              turnIndex={t.turnIndex}
-                              persistedBranches={t.persistedBranches}
-                              onBranched={(b) => handleBranched(i, b)}
-                              onUse={(s) => {
-                                setUsed(s);
-                                void navigator.clipboard?.writeText(s.openerLine).catch(() => {});
-                              }}
-                            />
-                          ) : (
-                            <p className="text-muted-foreground px-3.5 text-sm">
-                              Saving chat…
-                            </p>
-                          )}
-                        </MessageContent>
-                      </Message>
-                    )}
                   </MessageGroup>
                 </MessageScrollerItem>
               ))}
-              {loading && sessionId !== null && (
-                <MessageScrollerItem messageId="thinking">
+
+              {showWorking && (
+                <MessageScrollerItem messageId="working">
                   <Message align="start">
                     <AiAvatar />
                     <MessageContent>
                       <p className="text-muted-foreground flex items-center gap-2 px-3.5 text-sm">
-                        <Spinner /> Thinking of openers…
+                        <Spinner /> {messages.length === 0 ? "Composing…" : "Thinking…"}
                       </p>
                     </MessageContent>
                   </Message>
                 </MessageScrollerItem>
               )}
-              {used && (
-                <MessageScrollerItem messageId="copied-note">
-                  <Marker>
-                    <MarkerIcon>
-                      <CheckIcon />
-                    </MarkerIcon>
-                    <MarkerContent>
-                      Copied to clipboard: “{used.openerLine}” — go say it, then come back and
-                      branch if you need the follow-up.
-                    </MarkerContent>
-                    <Button
-                      type="button"
-                      variant="link"
-                      size="sm"
-                      className="ml-auto shrink-0"
-                      onClick={() => setUsed(null)}
-                    >
-                      dismiss
-                    </Button>
-                  </Marker>
+
+              {status === "error" && (
+                <MessageScrollerItem messageId="error">
+                  <Alert variant="destructive">
+                    <TriangleAlertIcon />
+                    <AlertDescription className="flex items-center justify-between gap-3">
+                      <span>
+                        {error?.message
+                          ? "The wingman hit a snag. Try again."
+                          : "Something went wrong."}
+                      </span>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => regenerate()}
+                      >
+                        Retry
+                      </Button>
+                    </AlertDescription>
+                  </Alert>
                 </MessageScrollerItem>
               )}
             </MessageScrollerContent>
@@ -345,7 +381,7 @@ export function CoachChat({ sessionId }: { sessionId: string | null }) {
 
         {/* composer */}
         <div className="border-border bg-background w-full shrink-0 border-t p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-          {turns.length === 0 && (
+          {messages.length === 0 && (
             <div className="mb-2 flex gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {QUICK.map((q) => (
                 <Button
@@ -354,7 +390,12 @@ export function CoachChat({ sessionId }: { sessionId: string | null }) {
                   size="sm"
                   variant="outline"
                   className="shrink-0 rounded-full"
-                  onClick={() => submit(`I'm in a ${q.toLowerCase()}. There's a girl nearby I'd like to talk to politely. Quick context: `)}
+                  disabled={busy || creating}
+                  onClick={() =>
+                    submit(
+                      `I'm in a ${q.toLowerCase()}. There's a girl nearby I'd like to talk to politely. Quick context: `,
+                    )
+                  }
                 >
                   {q}
                 </Button>
@@ -385,9 +426,15 @@ export function CoachChat({ sessionId }: { sessionId: string | null }) {
           />
           <InputGroup>
             <InputGroupAddon align="inline-start" className="py-0 pl-2">
-              <ComposerMenu onAddImage={() => fileRef.current?.click()} />
+              <ComposerMenu
+                disabled={busy || creating}
+                approachesDisabled={busy || !sessionId || messages.length === 0}
+                onApproaches={requestApproaches}
+                onAddImage={() => fileRef.current?.click()}
+              />
             </InputGroupAddon>
             <InputGroupTextarea
+              ref={textareaRef}
               value={situation}
               onChange={(e) => setSituation(e.target.value)}
               onKeyDown={(e) => {
@@ -398,25 +445,34 @@ export function CoachChat({ sessionId }: { sessionId: string | null }) {
               }}
               rows={1}
               enterKeyHint="send"
-              placeholder="Describe the scene…"
-              aria-label="Describe the situation"
-              // `field-sizing: content` (inline so it beats the stylesheet's
-              // `field-sizing-content` ordering) keeps the composer one line by
-              // default and grows it as the text wraps, up to `max-h`.
+              placeholder="Ask your wingman…"
+              aria-label="Message your wingman"
               style={{ fieldSizing: "content" }}
               className="max-h-32 min-h-10 overflow-y-auto px-2 py-2 text-[16px]"
             />
             <InputGroupAddon align="inline-end" className="py-0 pr-2">
-              <InputGroupButton
-                type="button"
-                variant="default"
-                size="icon-sm"
-                aria-label="Get ideas"
-                disabled={!situation.trim() || loading}
-                onClick={() => void submit()}
-              >
-                <SendIcon />
-              </InputGroupButton>
+              {busy ? (
+                <InputGroupButton
+                  type="button"
+                  variant="outline"
+                  size="icon-sm"
+                  aria-label="Stop"
+                  onClick={() => stop()}
+                >
+                  <SquareIcon />
+                </InputGroupButton>
+              ) : (
+                <InputGroupButton
+                  type="button"
+                  variant="default"
+                  size="icon-sm"
+                  aria-label="Send"
+                  disabled={!situation.trim() || creating}
+                  onClick={() => void submit()}
+                >
+                  {creating ? <Spinner /> : <SendIcon />}
+                </InputGroupButton>
+              )}
             </InputGroupAddon>
           </InputGroup>
         </div>

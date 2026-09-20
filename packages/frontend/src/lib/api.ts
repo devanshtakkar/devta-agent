@@ -1,4 +1,8 @@
+import { DefaultChatTransport, type UIMessage } from "ai";
+
 const API_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? "http://localhost:3001";
+
+export type ChatMessage = UIMessage;
 
 export interface Starter {
   id: string;
@@ -9,34 +13,19 @@ export interface Starter {
   nextMove: string;
 }
 
-export interface IdeasResponse {
+export interface ApproachInput {
   overview: string;
   starters: Starter[];
 }
 
-export interface BranchScenario {
-  herResponse: string;
-  yourReply: string;
-  tip: string;
-}
-
-export interface BranchResponse {
-  scenarios: BranchScenario[];
-  exitLine: string;
-}
-
-export interface PersistedBranch extends BranchResponse {
-  starterId?: string;
-  createdAt: string;
-}
-
-export interface PersistedTurn {
-  situation: string;
-  overview: string;
-  starters: Starter[];
-  branches: PersistedBranch[];
-  error?: string;
-  createdAt: string;
+/** Shape of the `tool-proposeApproaches` UI part while streaming/completed. */
+export interface ApproachToolPart {
+  type: "tool-proposeApproaches";
+  toolCallId: string;
+  state: "input-streaming" | "input-available" | "output-available" | "output-error";
+  input?: Partial<ApproachInput>;
+  output?: unknown;
+  errorText?: string;
 }
 
 export interface SessionListItem {
@@ -44,7 +33,7 @@ export interface SessionListItem {
   title: string;
   updatedAt: string;
   createdAt: string;
-  turnCount: number;
+  messageCount: number;
   preview: string;
 }
 
@@ -53,7 +42,7 @@ export interface ChatSessionDetail {
   title: string;
   createdAt: string;
   updatedAt: string;
-  turns: PersistedTurn[];
+  messages: ChatMessage[];
 }
 
 export const sessionsKeys = {
@@ -74,6 +63,14 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   }
   if (res.status === 204) return undefined as T;
   return (await res.json()) as T;
+}
+
+/** Chat transport backed by the streaming `/api/sessions/:uuid/chat` endpoint. */
+export function chatTransport(uuid: string) {
+  return new DefaultChatTransport({
+    api: `${API_URL}/api/sessions/${uuid}/chat`,
+    credentials: "include",
+  });
 }
 
 export function listSessions() {
@@ -97,25 +94,6 @@ export function renameSession(uuid: string, title: string) {
 
 export function deleteSession(uuid: string) {
   return apiFetch<void>(`/api/sessions/${uuid}`, { method: "DELETE" });
-}
-
-export function postTurn(uuid: string, situation: string, imageDataUrl?: string) {
-  return apiFetch<{ turnIndex: number; turn: PersistedTurn }>(`/api/sessions/${uuid}/turns`, {
-    method: "POST",
-    body: JSON.stringify({ situation, imageDataUrl }),
-  });
-}
-
-export function postBranch(
-  uuid: string,
-  turnIndex: number,
-  starter: Starter | string,
-  herResponse?: string,
-) {
-  return apiFetch<BranchResponse>(`/api/sessions/${uuid}/branches`, {
-    method: "POST",
-    body: JSON.stringify({ turnIndex, starter, herResponse }),
-  });
 }
 
 /** Downscale an image file to a compact JPEG data URL for AI context. */

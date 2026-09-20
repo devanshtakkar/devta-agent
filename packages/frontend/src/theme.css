@@ -98,3 +98,99 @@ body {
 #root [data-slot="card"] {
   text-align: left;
 }
+
+/* Assistant markdown (rendered by Streamdown). Tailwind v4 can't scan
+   streamdown's node_modules classes (the `@source` directive would have to
+   live in shadcn-managed `index.css`), so the rendered elements are styled
+   directly here instead of relying on utility classes we can't generate. */
+.md {
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+.md > :first-child {
+  margin-top: 0;
+}
+.md > :last-child {
+  margin-bottom: 0;
+}
+.md p {
+  margin: 0.5rem 0;
+}
+.md ul,
+.md ol {
+  margin: 0.5rem 0;
+  padding-left: 1.25rem;
+}
+.md ul {
+  list-style: disc;
+}
+.md ol {
+  list-style: decimal;
+}
+.md li {
+  margin: 0.15rem 0;
+}
+.md h1,
+.md h2,
+.md h3,
+.md h4 {
+  margin: 0.75rem 0 0.35rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.md h1 {
+  font-size: 1.15rem;
+}
+.md h2 {
+  font-size: 1.05rem;
+}
+.md h3 {
+  font-size: 0.95rem;
+}
+.md strong {
+  font-weight: 600;
+}
+.md a {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.md code {
+  background: var(--muted);
+  padding: 0.1rem 0.3rem;
+  border-radius: 0.35rem;
+  font-size: 0.8em;
+}
+.md pre {
+  background: var(--muted);
+  margin: 0.5rem 0;
+  padding: 0.6rem 0.75rem;
+  border-radius: 0.6rem;
+  overflow-x: auto;
+}
+.md pre code {
+  background: transparent;
+  padding: 0;
+}
+.md blockquote {
+  border-left: 3px solid var(--border);
+  margin: 0.5rem 0;
+  padding-left: 0.75rem;
+  color: var(--muted-foreground);
+}
+.md hr {
+  border-color: var(--border);
+  margin: 0.75rem 0;
+}
+.md table {
+  display: block;
+  width: 100%;
+  margin: 0.5rem 0;
+  border-collapse: collapse;
+  overflow-x: auto;
+}
+.md th,
+.md td {
+  border: 1px solid var(--border);
+  padding: 0.35rem 0.5rem;
+  text-align: left;
+}

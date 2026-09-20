@@ -250,9 +250,9 @@ export function SessionDrawer({
                                 {s.title}
                               </span>
                               <span className="text-muted-foreground mt-0.5 block truncate text-xs">
-                                {s.turnCount === 0
+                                {s.messageCount === 0
                                   ? "No messages yet"
-                                  : s.preview || `${s.turnCount} turns`}
+                                  : s.preview || `${s.messageCount} messages`}
                                 {" · "}
                                 {timeAgo(s.updatedAt)}
                               </span>
