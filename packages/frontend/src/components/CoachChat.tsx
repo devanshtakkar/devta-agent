@@ -17,12 +17,14 @@ import {
   getSession,
   sessionsKeys,
   type ApproachToolPart,
+  type BranchToolPart,
   type ChatMessage,
   type ChatSessionDetail,
   type Starter,
 } from "@/lib/api";
 import { setPendingDraft, takePendingDraft } from "@/lib/pending-draft";
 import { ApproachOptions } from "@/components/ApproachOptions";
+import { BranchScenarios } from "@/components/BranchScenarios";
 import { ComposerMenu } from "@/components/ComposerMenu";
 import { Response } from "@/components/Response";
 import { Thinking } from "@/components/Thinking";
@@ -95,10 +97,10 @@ function UserParts({ message }: { message: ChatMessage }) {
 
 function AssistantParts({
   message,
-  onUse,
+  onBranch,
 }: {
   message: ChatMessage;
-  onUse: (starter: Starter) => void;
+  onBranch: (starter: Starter) => void;
 }) {
   const reasoning = message.parts.filter(
     (p) => p.type === "reasoning",
@@ -109,6 +111,10 @@ function AssistantParts({
   const tools = message.parts.filter(
     (p) => p.type === "tool-proposeApproaches",
   ) as unknown as ApproachToolPart[];
+
+  const branchTools = message.parts.filter(
+    (p) => p.type === "tool-proposeBranches",
+  ) as unknown as BranchToolPart[];
 
   const text = message.parts
     .filter((p) => p.type === "text")
@@ -121,7 +127,10 @@ function AssistantParts({
         <Thinking text={reasoningText} streaming={reasoningStreaming} />
       )}
       {tools.map((tool) => (
-        <ApproachOptions key={tool.toolCallId} part={tool} onUse={onUse} />
+        <ApproachOptions key={tool.toolCallId} part={tool} onBranch={onBranch} />
+      ))}
+      {branchTools.map((tool) => (
+        <BranchScenarios key={tool.toolCallId} part={tool} />
       ))}
       {text.trim() && (
         <div className="w-full min-w-0">
@@ -270,9 +279,14 @@ export function CoachChat({ sessionId }: { sessionId: string | null }) {
     });
   }
 
-  function useStarter(starter: Starter) {
-    setSituation(`I like this opener: “${starter.openerLine}”. Here's what happened: `);
-    textareaRef.current?.focus();
+  function branchFromStarter(starter: Starter) {
+    if (busy || creating || !sessionId) return;
+    void sendMessage(
+      {
+        text: `I'm about to open with: “${starter.openerLine}”. Brainstorm how this conversation could branch out — give me a couple of scenarios so I'm prepared for however she reacts.`,
+      },
+      { body: { intent: "branches" } },
+    );
   }
 
   const last = messages[messages.length - 1];
@@ -336,7 +350,7 @@ export function CoachChat({ sessionId }: { sessionId: string | null }) {
                         {m.role === "user" ? (
                           <UserParts message={m} />
                         ) : (
-                          <AssistantParts message={m} onUse={useStarter} />
+                          <AssistantParts message={m} onBranch={branchFromStarter} />
                         )}
                       </MessageContent>
                     </Message>

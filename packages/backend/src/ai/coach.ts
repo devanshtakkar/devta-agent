@@ -42,6 +42,35 @@ export const proposeApproaches = tool({
   execute: async (input) => input,
 });
 
-export const chatTools = { proposeApproaches };
+const branchScenarioSchema = z.object({
+  id: z.string().describe("Short unique id, e.g. 'b1'."),
+  reaction: z
+    .string()
+    .describe("Short label of how she might react, e.g. 'She smiles and leans in'."),
+  read: z
+    .string()
+    .describe("One short line on what her reaction signals and how to read it."),
+  move: z
+    .string()
+    .describe("The exact thing the user says or does next in this branch."),
+  outcome: z
+    .string()
+    .describe("Where this branch can lead if it keeps going well."),
+});
+
+export const branchesSchema = z.object({
+  opener: z.string().describe("The opener being branched from."),
+  branches: z.array(branchScenarioSchema).min(2).max(4),
+});
+
+export const proposeBranches = tool({
+  description:
+    "Given an opener the user is about to use, brainstorm 2-4 ways the conversation could branch out based on how she reacts, so the user is prepared in advance. Use this only when the user asks how the conversation could branch out.",
+  inputSchema: branchesSchema,
+  execute: async (input) => input,
+});
+
+export const chatTools = { proposeApproaches, proposeBranches };
 
 export type StarterOutput = z.infer<typeof starterSchema>;
+export type BranchesOutput = z.infer<typeof branchesSchema>;

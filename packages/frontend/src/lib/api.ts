@@ -29,6 +29,29 @@ export interface ApproachToolPart {
   errorText?: string;
 }
 
+export interface BranchScenario {
+  id: string;
+  reaction: string;
+  read: string;
+  move: string;
+  outcome: string;
+}
+
+export interface BranchesInput {
+  opener: string;
+  branches: BranchScenario[];
+}
+
+/** Shape of the `tool-proposeBranches` UI part while streaming/completed. */
+export interface BranchToolPart {
+  type: "tool-proposeBranches";
+  toolCallId: string;
+  state: "input-streaming" | "input-available" | "output-available" | "output-error";
+  input?: Partial<BranchesInput>;
+  output?: unknown;
+  errorText?: string;
+}
+
 export interface SessionListItem {
   uuid: string;
   title: string;

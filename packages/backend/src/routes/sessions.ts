@@ -33,7 +33,7 @@ const uiMessageSchema = z.object({
 
 const chatBodySchema = z.object({
   messages: z.array(uiMessageSchema).min(1, "messages are required"),
-  intent: z.enum(["approaches"]).optional(),
+  intent: z.enum(["approaches", "branches"]).optional(),
 });
 
 const titleSchema = z.object({
@@ -277,7 +277,9 @@ router.post("/:uuid/chat", requireAuth, async (req: Request, res: Response) => {
       toolChoice:
         intent === "approaches"
           ? { type: "tool", toolName: "proposeApproaches" }
-          : "none",
+          : intent === "branches"
+            ? { type: "tool", toolName: "proposeBranches" }
+            : "none",
       messages: convertToModelMessages(forModel(incoming)),
       providerOptions: { openrouter: { reasoning: { enabled: true } } },
     });

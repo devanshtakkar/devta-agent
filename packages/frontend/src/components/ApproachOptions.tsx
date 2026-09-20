@@ -1,4 +1,4 @@
-import { CheckIcon, TriangleAlertIcon } from "lucide-react";
+import { GitBranchIcon, TriangleAlertIcon } from "lucide-react";
 import type { ApproachToolPart, Starter } from "@/lib/api";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -38,14 +38,14 @@ function Loading() {
 /**
  * Renders the `proposeApproaches` tool output: an overview line plus a
  * swipeable carousel of ready-to-use openers, each with a single action that
- * drops it into the composer so the user can add their own context.
+ * brainstorms how the conversation could branch out from that opener.
  */
 export function ApproachOptions({
   part,
-  onUse,
+  onBranch,
 }: {
   part: ApproachToolPart;
-  onUse: (starter: Starter) => void;
+  onBranch: (starter: Starter) => void;
 }) {
   if (part.state === "input-streaming") return <Loading />;
   if (part.state === "output-error") {
@@ -96,9 +96,14 @@ export function ApproachOptions({
                   </p>
                 </CardContent>
                 <CardFooter>
-                  <Button size="sm" className="w-full" onClick={() => onUse(s)}>
-                    <CheckIcon data-icon="inline-start" />
-                    Use this
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => onBranch(s)}
+                  >
+                    <GitBranchIcon data-icon="inline-start" />
+                    Branch out
                   </Button>
                 </CardFooter>
               </Card>
