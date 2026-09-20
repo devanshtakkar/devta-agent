@@ -1,6 +1,7 @@
 import { betterAuth } from "better-auth";
 import { mongodbAdapter } from "better-auth/adapters/mongodb";
 import { fromNodeHeaders, toNodeHandler } from "better-auth/node";
+import { admin } from "better-auth/plugins";
 import { MongoClient } from "mongodb";
 import type { NextFunction, Request, Response } from "express";
 import { env } from "./env.js";
@@ -14,6 +15,10 @@ export const auth = betterAuth({
   baseURL: env.BETTER_AUTH_URL,
   trustedOrigins: [env.FRONTEND_URL],
   database: mongodbAdapter(db, { client }),
+  // Admin plugin exposes `auth.api.createUser` server-side so the personal
+  // owner account can be provisioned via `pnpm create-user` (see docs/).
+  // Public sign-up stays enabled on the API; the frontend just hides it.
+  plugins: [admin()],
   emailAndPassword: {
     enabled: true,
     sendResetPassword: async ({ user, url }) => {

@@ -11,7 +11,10 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
-    "declaration": true,
+    // App, not a library: no .d.ts output. (Also avoids TS2883: the admin
+    // plugin's inferred types reference zod v4 internals, which aren't
+    // portable to declarations.)
+    "declaration": false,
     "sourceMap": true
   },
   "include": ["src"]
