@@ -26,3 +26,25 @@
   --input: oklch(0.922 0.005 325.62);
   --ring: oklch(0.711 0.019 323.02);
 }
+
+/* App-shell scroll lock — the installed PWA must feel like an app, not a
+   web page. The document itself never scrolls or rubber-bands in Y; only
+   designated inner containers (e.g. the chat thread) scroll. */
+html,
+body,
+#root {
+  height: 100%;
+}
+html {
+  overscroll-behavior: none;
+}
+body {
+  overflow: hidden;
+  overscroll-behavior: none;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+#root {
+  height: 100dvh;
+  overflow: hidden;
+}

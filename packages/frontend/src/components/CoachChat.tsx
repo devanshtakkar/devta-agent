@@ -55,9 +55,9 @@ export function CoachChat() {
   }
 
   return (
-    <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col">
-      {/* thread */}
-      <div className="flex flex-1 flex-col gap-4 px-4 pt-4 pb-40">
+    <div className="mx-auto flex h-full min-h-0 w-full max-w-md flex-1 flex-col">
+      {/* thread — the only vertically scrolling region */}
+      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain px-4 pt-4 pb-4">
         {turns.length === 0 && (
           <div className="mt-6">
             <h1 className="text-2xl font-semibold tracking-tight">Where are you right now?</h1>
@@ -116,8 +116,8 @@ export function CoachChat() {
         )}
       </div>
 
-      {/* sticky composer */}
-      <div className="border-border bg-background fixed inset-x-0 bottom-0 z-40 mx-auto w-full max-w-md border-t p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+      {/* composer — pinned in flow at the bottom, thread scrolls above it */}
+      <div className="border-border bg-background w-full shrink-0 border-t p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
         <div className="mb-2 flex gap-1.5 overflow-x-auto">
           {QUICK.map((q) => (
             <button

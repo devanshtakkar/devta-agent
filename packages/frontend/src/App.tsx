@@ -31,7 +31,7 @@ function App() {
 
   if (!session) {
     return (
-      <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col">
+      <main className="mx-auto flex h-dvh w-full max-w-md flex-col overflow-hidden">
         <div className="flex justify-end px-4 pt-3">
           <ThemeToggle />
         </div>
@@ -46,7 +46,7 @@ function App() {
   }
 
   return (
-    <main className="bg-background text-foreground mx-auto flex min-h-dvh w-full max-w-md flex-col">
+    <main className="bg-background text-foreground mx-auto flex h-dvh w-full max-w-md flex-col overflow-hidden">
       <header className="border-border sticky top-0 z-40 flex items-center justify-between border-b px-4 py-2.5 backdrop-blur">
         <span className="text-[15px] font-semibold tracking-tight">Devta · wingman</span>
         <div className="flex items-center gap-2">
