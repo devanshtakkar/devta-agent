@@ -79,7 +79,7 @@ export function ApproachOptions({
                   </CardDescription>
                   <CardTitle>{s.title}</CardTitle>
                 </CardHeader>
-                <CardContent className="flex flex-col gap-3">
+                <CardContent className="flex flex-1 flex-col gap-3">
                   <div className="border-border/60 bg-muted/50 rounded-xl border px-3.5 py-2.5">
                     <p className="text-[15px] leading-snug font-medium">
                       “{s.openerLine}”
