@@ -10,6 +10,7 @@ dist-ssr
 # Env
 .env
 *.local
+AGENTS.local.md
 
 # Logs
 logs

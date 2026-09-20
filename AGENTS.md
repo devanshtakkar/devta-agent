@@ -33,3 +33,6 @@ Devta is a personal wingman PWA (mobile-only) for dating confidence:
    directories in this monorepo (no nested `.git`). If `git status` ever shows them as a gitlink,
    a nested `.git` crept back in — delete it, do not commit the gitlink.
 2. Commit all frontend/backend work from root in this repo (branch `main`, remote `devta-agent`).
+3. When testing the app, use the login credentials in `AGENTS.local.md` (gitignored, never
+   commit it). If those credentials do not work, ask the user for updated ones — do not guess
+   or create a new account.
