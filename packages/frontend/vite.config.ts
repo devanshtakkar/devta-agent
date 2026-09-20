@@ -1,4 +1,5 @@
 import tailwindcss from '@tailwindcss/vite'
+import { tanstackRouter } from '@tanstack/router-plugin/vite'
 import react from '@vitejs/plugin-react'
 import path from 'node:path'
 import { defineConfig } from 'vite'
@@ -7,6 +8,7 @@ import { VitePWA } from 'vite-plugin-pwa'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
+    tanstackRouter({ target: 'react', autoCodeSplitting: true }),
     react(),
     tailwindcss(),
     VitePWA({
@@ -52,6 +54,14 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,webp}'],
+      },
+      devOptions: {
+        // vite-plugin-pwa disables PWA in `vite dev` by default —
+        // this is why "Install app" disappeared after the monorepo move.
+        // Enabling it serves /manifest.webmanifest + dev SW on localhost.
+        enabled: true,
+        navigateFallback: 'index.html',
+        type: 'module',
       },
     }),
   ],
