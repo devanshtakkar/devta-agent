@@ -71,7 +71,7 @@ export function ApproachOptions({
       <Carousel className="-mx-4 px-4">
         <CarouselContent className="-ml-3">
           {starters.map((s, i) => (
-            <CarouselItem key={s.id} className="max-w-[340px] basis-[82%] pl-3">
+            <CarouselItem key={s.id} className="max-w-[340px] basis-[82%] py-2 pl-3">
               <Card className="h-full">
                 <CardHeader>
                   <CardDescription>
