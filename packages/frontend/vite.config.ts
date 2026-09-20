@@ -60,4 +60,8 @@ export default defineConfig({
       '@': path.resolve(import.meta.dirname, './src'),
     },
   },
+  server: {
+    host: true,
+    allowedHosts: ['.minepicoin.com'],
+  },
 })

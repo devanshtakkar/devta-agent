@@ -1,5 +1,6 @@
 import express, { type Express } from "express";
 import cors from "cors";
+import morgan from "morgan";
 import os from "node:os";
 import { authHandler } from "./auth.js";
 import { env } from "./env.js";
@@ -11,6 +12,7 @@ import configRouter from "./routes/config.js";
 const app: Express = express();
 
 app.use(cors({ origin: env.FRONTEND_URL, credentials: true }));
+app.use(morgan("dev"));
 app.use(express.json({ limit: "10mb" }));
 
 app.get("/health", (_req, res) => {
@@ -26,7 +28,10 @@ app.use("/api/coach", coachRouter);
 app.use("/api/config", configRouter);
 
 async function main() {
-  await connectDb();
+  const mongo = await connectDb();
+  console.log(
+    `MongoDB connected: ${mongo.connection.host}/${mongo.connection.name}`,
+  );
   await seedDefaults();
   app.listen(env.PORT, () => {
     console.log(`d-backend listening on http://localhost:${env.PORT}`);

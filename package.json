@@ -8,6 +8,12 @@
     "dev:frontend": "pnpm --filter d-frontend dev",
     "dev:backend": "pnpm --filter d-backend dev",
     "build": "pnpm -r build",
-    "lint": "pnpm --filter d-frontend lint"
+    "lint": "pnpm --filter d-frontend lint",
+    "tunnel:frontend": "cloudflared tunnel run --url http://localhost:5173 dev-win-5173",
+    "tunnel:backend": "cloudflared tunnel run --url http://localhost:5000 dev-win-5000",
+    "tunnel": "concurrently -n frontend,backend -c cyan,magenta \"pnpm tunnel:frontend\" \"pnpm tunnel:backend\""
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.5"
   }
 }

@@ -33,4 +33,3 @@ Devta is a personal wingman PWA (mobile-only) for dating confidence:
    directories in this monorepo (no nested `.git`). If `git status` ever shows them as a gitlink,
    a nested `.git` crept back in — delete it, do not commit the gitlink.
 2. Commit all frontend/backend work from root in this repo (branch `main`, remote `devta-agent`).
-3. The old `devta-frontend` remote is retired; do not push packages anywhere else.
