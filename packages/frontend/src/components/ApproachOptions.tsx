@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   BookmarkCheckIcon,
   BookmarkIcon,
@@ -6,11 +7,8 @@ import {
 } from "lucide-react";
 import type { ApproachToolPart, Starter } from "@/lib/api";
 import { RISK_LABELS } from "@/lib/api";
-import {
-  removeSavedApproach,
-  saveApproach,
-  useSavedApproaches,
-} from "@/lib/saved-approaches";
+import { removeSavedApproach, useSavedApproaches } from "@/lib/saved-approaches";
+import { ScenarioPicker } from "@/components/ScenarioPicker";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -55,6 +53,7 @@ export function ApproachOptions({
   sessionId?: string | null;
 }) {
   const saved = useSavedApproaches();
+  const [pickerStarter, setPickerStarter] = useState<Starter | null>(null);
 
   if (part.state === "input-streaming") return <Loading />;
   if (part.state === "output-error") {
@@ -83,7 +82,7 @@ export function ApproachOptions({
     if (existing) {
       removeSavedApproach(existing.id);
     } else {
-      saveApproach(starter, { overview, sessionId: sessionId ?? undefined });
+      setPickerStarter(starter);
     }
   }
 
@@ -146,6 +145,15 @@ export function ApproachOptions({
           ))}
         </CarouselContent>
       </Carousel>
+      <ScenarioPicker
+        open={pickerStarter !== null}
+        onOpenChange={(open) => {
+          if (!open) setPickerStarter(null);
+        }}
+        starter={pickerStarter}
+        overview={overview}
+        sessionId={sessionId}
+      />
     </div>
   );
 }

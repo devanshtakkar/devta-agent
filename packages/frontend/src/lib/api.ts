@@ -289,6 +289,25 @@ export function getCurrentModel() {
   return apiFetch<ModelInfo>("/api/models/current");
 }
 
+export interface ScenarioSuggestionBody {
+  starter: Pick<
+    Starter,
+    "title" | "openerLine" | "why" | "nextMove" | "gracefulExit"
+  >;
+  overview?: string;
+  sessionId?: string;
+  /** Scenario labels the user already has; AI reuses one when it fits. */
+  existing?: string[];
+}
+
+/** Ask the AI to name the scenario a saved opener belongs to. Needs network. */
+export function suggestScenario(body: ScenarioSuggestionBody) {
+  return apiFetch<{ scenario: string }>("/api/scenarios/suggest", {
+    method: "POST",
+    body: JSON.stringify(body),
+  }).then((d) => d.scenario);
+}
+
 export function renameSession(uuid: string, title: string) {
   return apiFetch<{ uuid: string; title: string }>(`/api/sessions/${uuid}`, {
     method: "PATCH",

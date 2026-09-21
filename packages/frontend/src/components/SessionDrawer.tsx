@@ -1,4 +1,4 @@
-import { useState, type CSSProperties } from "react";
+import { useMemo, useState, type CSSProperties } from "react";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -21,7 +21,7 @@ import {
   type ActiveConnectionInfo,
   type SessionListItem,
 } from "@/lib/api";
-import { useSavedApproaches } from "@/lib/saved-approaches";
+import { groupSavedApproaches, useSavedApproaches } from "@/lib/saved-approaches";
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
@@ -74,6 +74,10 @@ export function SessionDrawer({
   >(null);
   const [confirmText, setConfirmText] = useState("");
   const savedApproaches = useSavedApproaches();
+  const savedGroups = useMemo(
+    () => groupSavedApproaches(savedApproaches),
+    [savedApproaches],
+  );
 
   const listQuery = useQuery({
     queryKey: sessionsKeys.list,
@@ -223,8 +227,8 @@ export function SessionDrawer({
                 </Button>
               </div>
               <ul className="flex flex-col gap-0.5">
-                {savedApproaches.slice(0, 3).map((item) => (
-                  <li key={item.id}>
+                {savedGroups.slice(0, 4).map((group) => (
+                  <li key={group.scenario}>
                     <Link
                       to="/saved"
                       onClick={close}
@@ -232,11 +236,16 @@ export function SessionDrawer({
                     >
                       <BookmarkIcon className="text-muted-foreground size-4 shrink-0" />
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-medium">
-                          {item.starter.title}
+                        <span className="flex items-center gap-2">
+                          <span className="truncate text-sm font-medium">
+                            {group.scenario}
+                          </span>
+                          <span className="text-muted-foreground text-xs">
+                            {group.items.length}
+                          </span>
                         </span>
                         <span className="text-muted-foreground block truncate text-xs">
-                          “{item.starter.openerLine}”
+                          “{group.items[0].starter.openerLine}”
                         </span>
                       </span>
                     </Link>

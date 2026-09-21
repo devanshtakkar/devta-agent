@@ -8,6 +8,8 @@ import type { Starter } from "@/lib/api";
 export interface SavedApproach {
   id: string;
   starter: Starter;
+  /** Scenario the user filed it under, e.g. "Gym", "Cafe". */
+  scenario: string;
   /** The agent's read of the situation this option came from, if any. */
   overview?: string;
   /** The chat it was saved from, so we can offer a jump back. */
@@ -15,37 +17,78 @@ export interface SavedApproach {
   savedAt: string;
 }
 
-const STORAGE_KEY = "devta-saved-approaches";
-
 export interface SaveApproachContext {
+  scenario: string;
   overview?: string;
   sessionId?: string;
 }
 
+/** Fallback group for entries saved before scenarios existed. */
+export const DEFAULT_SCENARIO = "Unsorted";
+
+/** Common scenarios offered before the user has saved anything. */
+export const SCENARIO_PRESETS = [
+  "Gym",
+  "Cafe",
+  "Restaurant",
+  "Bar",
+  "Street",
+  "Party",
+  "Campus",
+  "Library",
+  "Work",
+] as const;
+
+const STORAGE_KEY = "devta-saved-approaches";
+
 let cache: SavedApproach[] | null = null;
 const listeners = new Set<() => void>();
 
-function isStarter(value: unknown): value is Starter {
-  if (!value || typeof value !== "object") return false;
+/**
+ * Coerce a stored starter into a complete `Starter`. Tool output from older
+ * chats may be missing fields (`gracefulExit`, `risk`, …), so we fill defaults
+ * instead of discarding the saved option.
+ */
+function normalizeStarter(value: unknown): Starter | null {
+  if (!value || typeof value !== "object") return null;
   const s = value as Partial<Starter>;
-  return (
-    typeof s.id === "string" &&
-    typeof s.title === "string" &&
-    typeof s.openerLine === "string" &&
-    typeof s.why === "string" &&
-    typeof s.nextMove === "string" &&
-    typeof s.gracefulExit === "string"
-  );
+  const openerLine = typeof s.openerLine === "string" ? s.openerLine.trim() : "";
+  const title = typeof s.title === "string" ? s.title.trim() : "";
+  if (!openerLine && !title) return null;
+  return {
+    id:
+      typeof s.id === "string" && s.id
+        ? s.id
+        : `starter-${Math.random().toString(36).slice(2)}`,
+    title: title || openerLine.slice(0, 60),
+    openerLine: openerLine || title,
+    why: typeof s.why === "string" ? s.why : "",
+    risk: s.risk === "medium" || s.risk === "high" ? s.risk : "low",
+    nextMove: typeof s.nextMove === "string" ? s.nextMove : "",
+    gracefulExit: typeof s.gracefulExit === "string" ? s.gracefulExit : "",
+  };
 }
 
-function isSavedApproach(value: unknown): value is SavedApproach {
-  if (!value || typeof value !== "object") return false;
+/** Accepts legacy entries without a scenario and files them under the default. */
+function normalizeEntry(value: unknown): SavedApproach | null {
+  if (!value || typeof value !== "object") return null;
   const v = value as Partial<SavedApproach>;
-  return (
-    typeof v.id === "string" &&
-    typeof v.savedAt === "string" &&
-    isStarter(v.starter)
-  );
+  const starter = normalizeStarter(v.starter);
+  if (!starter || typeof v.id !== "string" || typeof v.savedAt !== "string") {
+    return null;
+  }
+  const scenario =
+    typeof v.scenario === "string" && v.scenario.trim()
+      ? v.scenario.trim()
+      : DEFAULT_SCENARIO;
+  return {
+    id: v.id,
+    starter,
+    scenario,
+    overview: typeof v.overview === "string" ? v.overview : undefined,
+    sessionId: typeof v.sessionId === "string" ? v.sessionId : undefined,
+    savedAt: v.savedAt,
+  };
 }
 
 function readStorage(): SavedApproach[] {
@@ -55,7 +98,9 @@ function readStorage(): SavedApproach[] {
     if (!raw) return [];
     const parsed: unknown = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-    return parsed.filter(isSavedApproach);
+    return parsed
+      .map(normalizeEntry)
+      .filter((entry): entry is SavedApproach => entry !== null);
   } catch {
     // Corrupt or unavailable storage — start empty rather than crash.
     return [];
@@ -98,6 +143,12 @@ if (typeof window !== "undefined") {
     cache = readStorage();
     emit();
   });
+  // A page restored from the back-forward cache keeps stale module state.
+  window.addEventListener("pageshow", (event) => {
+    if (!event.persisted) return;
+    cache = readStorage();
+    emit();
+  });
 }
 
 function newId(): string {
@@ -120,25 +171,62 @@ export function isApproachSaved(starter: Starter): boolean {
   return findSavedApproach(starter) !== undefined;
 }
 
+/** Existing scenario labels, most recently used first. */
+export function listScenarios(): string[] {
+  const seen = new Set<string>();
+  const scenarios: string[] = [];
+  for (const item of getSnapshot()) {
+    if (seen.has(item.scenario)) continue;
+    seen.add(item.scenario);
+    scenarios.push(item.scenario);
+  }
+  return scenarios;
+}
+
+/**
+ * Save the starter under a scenario. If the same opener was already saved,
+ * move it into the new scenario instead of duplicating it.
+ */
 export function saveApproach(
   starter: Starter,
-  context: SaveApproachContext = {},
+  context: SaveApproachContext,
 ): SavedApproach {
+  const scenario = context.scenario.trim() || DEFAULT_SCENARIO;
   const existing = findSavedApproach(starter);
-  if (existing) return existing;
   const entry: SavedApproach = {
-    id: newId(),
-    starter,
+    id: existing?.id ?? newId(),
+    starter: normalizeStarter(starter) ?? starter,
+    scenario,
     overview: context.overview,
     sessionId: context.sessionId,
     savedAt: new Date().toISOString(),
   };
-  persist([entry, ...getSnapshot()]);
+  persist([entry, ...getSnapshot().filter((s) => s.id !== entry.id)]);
   return entry;
 }
 
 export function removeSavedApproach(id: string) {
   persist(getSnapshot().filter((s) => s.id !== id));
+}
+
+export interface ScenarioGroup {
+  scenario: string;
+  items: SavedApproach[];
+}
+
+/** Group saved options by scenario; groups ordered by most recent save. */
+export function groupSavedApproaches(items: SavedApproach[]): ScenarioGroup[] {
+  const groups = new Map<string, SavedApproach[]>();
+  for (const item of items) {
+    const group = groups.get(item.scenario);
+    if (group) group.push(item);
+    else groups.set(item.scenario, [item]);
+  }
+  // `items` is newest-first, so group insertion order is already by recency.
+  return [...groups.entries()].map(([scenario, groupItems]) => ({
+    scenario,
+    items: groupItems,
+  }));
 }
 
 /** Reactive list; re-renders the caller whenever saved options change. */
