@@ -1,5 +1,14 @@
-import { GitBranchIcon, TriangleAlertIcon } from "lucide-react";
+import { useState } from "react";
+import {
+  BookmarkCheckIcon,
+  BookmarkIcon,
+  GitBranchIcon,
+  TriangleAlertIcon,
+} from "lucide-react";
 import type { ApproachToolPart, Starter } from "@/lib/api";
+import { RISK_LABELS } from "@/lib/api";
+import { removeSavedApproach, useSavedApproaches } from "@/lib/saved-approaches";
+import { ScenarioPicker } from "@/components/ScenarioPicker";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,12 +21,6 @@ import {
 } from "@/components/ui/card";
 import { Carousel, CarouselContent, CarouselItem } from "@/components/ui/carousel";
 import { Skeleton } from "@/components/ui/skeleton";
-
-const RISK_LABEL: Record<Starter["risk"], string> = {
-  low: "Low risk",
-  medium: "Medium risk",
-  high: "Higher risk",
-};
 
 function Loading() {
   return (
@@ -43,10 +46,15 @@ function Loading() {
 export function ApproachOptions({
   part,
   onBranch,
+  sessionId,
 }: {
   part: ApproachToolPart;
   onBranch: (starter: Starter) => void;
+  sessionId?: string | null;
 }) {
+  const saved = useSavedApproaches();
+  const [pickerStarter, setPickerStarter] = useState<Starter | null>(null);
+
   if (part.state === "input-streaming") return <Loading />;
   if (part.state === "output-error") {
     return (
@@ -63,6 +71,21 @@ export function ApproachOptions({
   const overview = part.input?.overview;
   if (starters.length === 0) return <Loading />;
 
+  function isSaved(starter: Starter) {
+    return saved.some((v) => v.starter.openerLine === starter.openerLine);
+  }
+
+  function toggleSave(starter: Starter) {
+    const existing = saved.find(
+      (s) => s.starter.openerLine === starter.openerLine,
+    );
+    if (existing) {
+      removeSavedApproach(existing.id);
+    } else {
+      setPickerStarter(starter);
+    }
+  }
+
   return (
     <div className="flex min-w-0 flex-col gap-2.5">
       {overview && (
@@ -75,7 +98,7 @@ export function ApproachOptions({
               <Card className="h-full">
                 <CardHeader>
                   <CardDescription>
-                    Option {i + 1} of {starters.length} · {RISK_LABEL[s.risk] ?? s.risk}
+                    Option {i + 1} of {starters.length} · {RISK_LABELS[s.risk] ?? s.risk}
                   </CardDescription>
                   <CardTitle>{s.title}</CardTitle>
                 </CardHeader>
@@ -95,15 +118,26 @@ export function ApproachOptions({
                     {s.gracefulExit}
                   </p>
                 </CardContent>
-                <CardFooter>
+                <CardFooter className="gap-2">
                   <Button
                     size="sm"
                     variant="outline"
-                    className="w-full"
+                    className="flex-1"
                     onClick={() => onBranch(s)}
                   >
                     <GitBranchIcon data-icon="inline-start" />
                     Branch out
+                  </Button>
+                  <Button
+                    type="button"
+                    size="icon-sm"
+                    variant={isSaved(s) ? "default" : "outline"}
+                    aria-label={isSaved(s) ? "Remove saved approach" : "Save approach"}
+                    aria-pressed={isSaved(s)}
+                    title={isSaved(s) ? "Saved" : "Save for later"}
+                    onClick={() => toggleSave(s)}
+                  >
+                    {isSaved(s) ? <BookmarkCheckIcon /> : <BookmarkIcon />}
                   </Button>
                 </CardFooter>
               </Card>
@@ -111,6 +145,15 @@ export function ApproachOptions({
           ))}
         </CarouselContent>
       </Carousel>
+      <ScenarioPicker
+        open={pickerStarter !== null}
+        onOpenChange={(open) => {
+          if (!open) setPickerStarter(null);
+        }}
+        starter={pickerStarter}
+        overview={overview}
+        sessionId={sessionId}
+      />
     </div>
   );
 }

@@ -30,6 +30,12 @@ export interface ApproachInput {
   starters: Starter[];
 }
 
+export const RISK_LABELS: Record<Starter["risk"], string> = {
+  low: "Low risk",
+  medium: "Medium risk",
+  high: "Higher risk",
+};
+
 /** Shape of the `tool-proposeApproaches` UI part while streaming/completed. */
 export interface ApproachToolPart {
   type: "tool-proposeApproaches";
@@ -301,6 +307,25 @@ export function createSession() {
 
 export function getCurrentModel() {
   return apiFetch<ModelInfo>("/api/models/current");
+}
+
+export interface ScenarioSuggestionBody {
+  starter: Pick<
+    Starter,
+    "title" | "openerLine" | "why" | "nextMove" | "gracefulExit"
+  >;
+  overview?: string;
+  sessionId?: string;
+  /** Scenario labels the user already has; AI reuses one when it fits. */
+  existing?: string[];
+}
+
+/** Ask the AI to name the scenario a saved opener belongs to. Needs network. */
+export function suggestScenario(body: ScenarioSuggestionBody) {
+  return apiFetch<{ scenario: string }>("/api/scenarios/suggest", {
+    method: "POST",
+    body: JSON.stringify(body),
+  }).then((d) => d.scenario);
 }
 
 export function getModelSettings() {

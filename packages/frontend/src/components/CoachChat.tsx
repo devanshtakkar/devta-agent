@@ -168,7 +168,12 @@ function AssistantParts({
         <Thinking text={reasoningText} streaming={reasoningStreaming} />
       )}
       {tools.map((tool) => (
-        <ApproachOptions key={tool.toolCallId} part={tool} onBranch={onBranch} />
+        <ApproachOptions
+          key={tool.toolCallId}
+          part={tool}
+          onBranch={onBranch}
+          sessionId={sessionId}
+        />
       ))}
       {branchTools.map((tool) => (
         <BranchScenarios key={tool.toolCallId} part={tool} />

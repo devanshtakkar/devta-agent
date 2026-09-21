@@ -10,6 +10,7 @@ import sessionsRouter from "./routes/sessions.js";
 import connectionsRouter from "./routes/connections.js";
 import configRouter from "./routes/config.js";
 import modelsRouter from "./routes/models.js";
+import scenariosRouter from "./routes/scenarios.js";
 
 const app: Express = express();
 
@@ -30,6 +31,7 @@ app.use("/api/sessions", sessionsRouter);
 app.use("/api/connections", connectionsRouter);
 app.use("/api/config", configRouter);
 app.use("/api/models", modelsRouter);
+app.use("/api/scenarios", scenariosRouter);
 
 async function main() {
   const mongo = await connectDb();

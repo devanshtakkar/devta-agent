@@ -1,7 +1,8 @@
-import { useState, type CSSProperties } from "react";
+import { useMemo, useState, type CSSProperties } from "react";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  BookmarkIcon,
   CheckIcon,
   EllipsisVerticalIcon,
   MessageSquareIcon,
@@ -21,6 +22,7 @@ import {
   type ActiveConnectionInfo,
   type SessionListItem,
 } from "@/lib/api";
+import { groupSavedApproaches, useSavedApproaches } from "@/lib/saved-approaches";
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
@@ -72,6 +74,11 @@ export function SessionDrawer({
     { uuid: string; title: string; connection: ActiveConnectionInfo } | null
   >(null);
   const [confirmText, setConfirmText] = useState("");
+  const savedApproaches = useSavedApproaches();
+  const savedGroups = useMemo(
+    () => groupSavedApproaches(savedApproaches),
+    [savedApproaches],
+  );
 
   const listQuery = useQuery({
     queryKey: sessionsKeys.list,
@@ -203,6 +210,51 @@ export function SessionDrawer({
               </p>
             )}
           </div>
+
+          {savedApproaches.length > 0 && (
+            <div className="border-border/60 border-t px-5 py-3">
+              <div className="mb-1.5 flex items-center justify-between gap-2">
+                <h2 className="font-heading text-sm font-semibold tracking-tight">
+                  Saved approaches
+                </h2>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="-mr-2 text-xs"
+                  nativeButton={false}
+                  render={<Link to="/saved" onClick={close} />}
+                >
+                  View all
+                </Button>
+              </div>
+              <ul className="flex flex-col gap-0.5">
+                {savedGroups.slice(0, 4).map((group) => (
+                  <li key={group.scenario}>
+                    <Link
+                      to="/saved"
+                      onClick={close}
+                      className="hover:bg-muted/60 flex items-center gap-2.5 rounded-xl px-2 py-2 transition-colors"
+                    >
+                      <BookmarkIcon className="text-muted-foreground size-4 shrink-0" />
+                      <span className="min-w-0 flex-1">
+                        <span className="flex items-center gap-2">
+                          <span className="truncate text-sm font-medium">
+                            {group.scenario}
+                          </span>
+                          <span className="text-muted-foreground text-xs">
+                            {group.items.length}
+                          </span>
+                        </span>
+                        <span className="text-muted-foreground block truncate text-xs">
+                          “{group.items[0].starter.openerLine}”
+                        </span>
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           <div className="border-border/60 min-h-0 flex-1 overflow-y-auto overscroll-contain border-t">
             {listQuery.isPending && (
