@@ -10,14 +10,28 @@ import {
   XIcon,
 } from "lucide-react";
 import {
+  activeConnectionFromError,
   createSession,
   deleteSession,
   listSessions,
   renameSession,
   sessionsKeys,
+  STAGE_LABELS,
+  type ActiveConnectionInfo,
   type SessionListItem,
 } from "@/lib/api";
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Input } from "@/components/ui/input";
 import {
   Drawer,
   DrawerContent,
@@ -53,6 +67,10 @@ export function SessionDrawer({
   const [menuUuid, setMenuUuid] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [blockedDelete, setBlockedDelete] = useState<
+    { uuid: string; title: string; connection: ActiveConnectionInfo } | null
+  >(null);
+  const [confirmText, setConfirmText] = useState("");
 
   const listQuery = useQuery({
     queryKey: sessionsKeys.list,
@@ -65,6 +83,8 @@ export function SessionDrawer({
     setMenuUuid(null);
     setEditingUuid(null);
     setConfirmDelete(null);
+    setBlockedDelete(null);
+    setConfirmText("");
     onOpenChange(false);
   }
 
@@ -93,13 +113,30 @@ export function SessionDrawer({
   });
 
   const deleteMutation = useMutation({
-    mutationFn: deleteSession,
-    onSuccess: (_data, uuid) => {
+    mutationFn: ({ uuid, confirm }: { uuid: string; confirm?: string }) =>
+      deleteSession(uuid, confirm ? { confirm } : undefined),
+    onSuccess: (_data, vars) => {
       setConfirmDelete(null);
       setMenuUuid(null);
+      setBlockedDelete(null);
+      setConfirmText("");
       invalidateList();
-      void queryClient.removeQueries({ queryKey: sessionsKeys.detail(uuid) });
-      if (activeUuid === uuid) void navigate({ to: "/" });
+      void queryClient.removeQueries({ queryKey: sessionsKeys.detail(vars.uuid) });
+      if (activeUuid === vars.uuid) void navigate({ to: "/" });
+    },
+    onError: (err, vars) => {
+      // The chat is linked to a connection: the API blocks the delete and asks
+      // for a typed confirmation. Surface the warning + CONFIRM gate.
+      const connection = activeConnectionFromError(err);
+      if (!connection) return;
+      const item = listQuery.data?.find((s) => s.uuid === vars.uuid);
+      setConfirmDelete(null);
+      setConfirmText("");
+      setBlockedDelete({
+        uuid: vars.uuid,
+        title: item?.title ?? "This chat",
+        connection,
+      });
     },
   });
 
@@ -289,7 +326,7 @@ export function SessionDrawer({
                                   size="sm"
                                   variant="destructive"
                                   disabled={deleteMutation.isPending}
-                                  onClick={() => deleteMutation.mutate(s.uuid)}
+                                  onClick={() => deleteMutation.mutate({ uuid: s.uuid })}
                                 >
                                   Delete
                                 </Button>
@@ -322,6 +359,58 @@ export function SessionDrawer({
             </ul>
           </div>
         </div>
+
+        <AlertDialog
+          open={blockedDelete !== null}
+          onOpenChange={(o) => {
+            if (!o) {
+              setBlockedDelete(null);
+              setConfirmText("");
+            }
+          }}
+        >
+          <AlertDialogContent size="sm">
+            <AlertDialogHeader>
+              <AlertDialogTitle>This chat is linked to a connection</AlertDialogTitle>
+              <AlertDialogDescription>
+                “{blockedDelete?.title}” is the origin of the{" "}
+                <span className="text-foreground font-medium">
+                  {blockedDelete?.connection.name}
+                </span>{" "}
+                connection
+                {blockedDelete
+                  ? ` (${STAGE_LABELS[blockedDelete.connection.stage]})`
+                  : ""}
+                . Deleting the chat erases its coaching history but keeps the
+                connection tracked. Type <span className="font-medium">CONFIRM</span> to
+                delete anyway.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <Input
+              value={confirmText}
+              onChange={(e) => setConfirmText(e.target.value)}
+              placeholder="CONFIRM"
+              aria-label="Type CONFIRM to delete this chat"
+              autoCapitalize="characters"
+              autoCorrect="off"
+              spellCheck={false}
+            />
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                variant="destructive"
+                disabled={confirmText !== "CONFIRM" || deleteMutation.isPending}
+                onClick={() => {
+                  if (blockedDelete) {
+                    deleteMutation.mutate({ uuid: blockedDelete.uuid, confirm: "CONFIRM" });
+                  }
+                }}
+              >
+                Delete chat
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </DrawerContent>
     </Drawer>
   );

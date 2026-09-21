@@ -13,10 +13,14 @@ import { env } from "../env.js";
 import { getContextLength, resolveModel } from "../services/model-info.js";
 import { SYSTEM_PROMPT, chatTools } from "../ai/coach.js";
 import { ChatSession } from "../models/ChatSession.js";
+import { Connection } from "../models/Connection.js";
 
 const router: Router = Router();
 
 const uuidParamSchema = z.object({ uuid: z.string().uuid("invalid session id") });
+
+/** Typed override required to delete a chat that is linked to a connection. */
+const DELETE_CONFIRMATION = "CONFIRM";
 
 const renameBodySchema = z.object({
   title: z.string().trim().min(1, "title is required").max(80),
@@ -290,9 +294,29 @@ router.patch("/:uuid", requireAuth, async (req: Request, res: Response) => {
 router.delete("/:uuid", requireAuth, async (req: Request, res: Response) => {
   const parsed = uuidParamSchema.safeParse(req.params);
   if (!parsed.success) return res.status(400).json({ error: "Invalid session id" });
+  const userId = getUserId(req);
+
+  // A chat that led to a tracked connection carries its coaching history, so
+  // deleting it is gated behind an explicit typed confirmation. The user must
+  // pass `?confirm=CONFIRM` (the UI asks them to type it) to override.
+  const connection = await Connection.findOne({
+    userId,
+    originSessionId: parsed.data.uuid,
+  }).lean<{ uuid: string; name: string; stage: string } | null>();
+  if (connection && req.query.confirm !== DELETE_CONFIRMATION) {
+    return res.status(409).json({
+      error: "This chat is linked to a connection and can't be deleted without confirmation",
+      connection: {
+        uuid: connection.uuid,
+        name: connection.name,
+        stage: connection.stage,
+      },
+    });
+  }
+
   const result = await ChatSession.deleteOne({
     uuid: parsed.data.uuid,
-    userId: getUserId(req),
+    userId,
   });
   if (result.deletedCount === 0) return res.status(404).json({ error: "Session not found" });
   return res.status(204).end();

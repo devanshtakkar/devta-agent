@@ -14,6 +14,9 @@ const router: Router = Router();
 
 const uuidParamSchema = z.object({ uuid: z.string().uuid("invalid connection id") });
 
+/** Typed override required to delete a tracked connection. */
+const DELETE_CONFIRMATION = "CONFIRM";
+
 const stageSchema = z.enum(CONNECTION_STAGES);
 const eventTypeSchema = z.enum(CONNECTION_EVENT_TYPES);
 
@@ -218,6 +221,15 @@ router.delete(
 router.delete("/:uuid", requireAuth, async (req: Request, res: Response) => {
   const parsed = uuidParamSchema.safeParse(req.params);
   if (!parsed.success) return res.status(400).json({ error: "Invalid connection id" });
+
+  // Deleting a tracked connection is destructive, so it is gated behind an
+  // explicit typed confirmation. The chat it came from is left untouched.
+  if (req.query.confirm !== DELETE_CONFIRMATION) {
+    return res.status(409).json({
+      error: "Deleting a connection requires confirmation",
+    });
+  }
+
   const result = await Connection.deleteOne({
     uuid: parsed.data.uuid,
     userId: getUserId(req),
