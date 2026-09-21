@@ -22,12 +22,18 @@ import {
   type BranchToolPart,
   type ChatMessage,
   type ChatSessionDetail,
+  type ConnectionToolPart,
   type Starter,
 } from "@/lib/api";
-import { setPendingDraft, takePendingDraft } from "@/lib/pending-draft";
+import {
+  setPendingDraft,
+  takePendingDraft,
+  type PendingDraft,
+} from "@/lib/pending-draft";
 import { ApproachOptions } from "@/components/ApproachOptions";
 import { BranchScenarios } from "@/components/BranchScenarios";
 import { ComposerMenu } from "@/components/ComposerMenu";
+import { ConnectionDraftCard } from "@/components/ConnectionDraftCard";
 import { Response } from "@/components/Response";
 import { Thinking } from "@/components/Thinking";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -63,6 +69,9 @@ const QUICK = ["Cafe", "Restaurant", "Street", "Party", "Campus"];
 
 const APPROACH_PROMPT =
   "Give me 5 concrete approaches for what to do right now, based on our conversation.";
+
+const CAPTURE_PROMPT =
+  "Save what we discussed as a connection I can track. Summarize who she is, what happened and where it stands, then show me the draft to review.";
 
 function imagePart(dataUrl: string): FileUIPart {
   return { type: "file", mediaType: "image/jpeg", url: dataUrl, filename: "scene.jpg" };
@@ -100,9 +109,11 @@ function UserParts({ message }: { message: ChatMessage }) {
 function AssistantParts({
   message,
   onBranch,
+  sessionId,
 }: {
   message: ChatMessage;
   onBranch: (starter: Starter) => void;
+  sessionId: string | null;
 }) {
   const reasoning = message.parts.filter(
     (p) => p.type === "reasoning",
@@ -117,6 +128,10 @@ function AssistantParts({
   const branchTools = message.parts.filter(
     (p) => p.type === "tool-proposeBranches",
   ) as unknown as BranchToolPart[];
+
+  const connectionTools = message.parts.filter(
+    (p) => p.type === "tool-proposeConnection",
+  ) as unknown as ConnectionToolPart[];
 
   const text = message.parts
     .filter((p) => p.type === "text")
@@ -133,6 +148,9 @@ function AssistantParts({
       ))}
       {branchTools.map((tool) => (
         <BranchScenarios key={tool.toolCallId} part={tool} />
+      ))}
+      {connectionTools.map((tool) => (
+        <ConnectionDraftCard key={tool.toolCallId} part={tool} sessionId={sessionId} />
       ))}
       {text.trim() && (
         <div className="w-full min-w-0">
@@ -225,6 +243,33 @@ export function CoachChat({ sessionId }: { sessionId: string | null }) {
     }
   }
 
+  async function startNewChat(draft: PendingDraft) {
+    setCreating(true);
+    try {
+      const created = await createSession();
+      queryClient.setQueryData<ChatSessionDetail>(sessionsKeys.detail(created.uuid), {
+        uuid: created.uuid,
+        title: created.title,
+        createdAt: created.createdAt,
+        updatedAt: created.updatedAt,
+        messages: [],
+      });
+      setPendingDraft(draft);
+      setSituation("");
+      setImageDataUrl(undefined);
+      setApproachActive(false);
+      void navigate({
+        to: "/s/$sessionId",
+        params: { sessionId: created.uuid },
+        replace: true,
+      });
+    } catch {
+      // Leave the composer intact so the user can retry.
+    } finally {
+      setCreating(false);
+    }
+  }
+
   async function submit(prefill?: string) {
     if (busy || creating) return;
     const text = (prefill ?? situation).trim();
@@ -234,37 +279,14 @@ export function CoachChat({ sessionId }: { sessionId: string | null }) {
     const canSend = text.length > 0 || (useApproaches && !isFirstMessage);
     if (!canSend) return;
 
-    const intent = useApproaches ? ({ intent: "approaches" } as const) : undefined;
+    const intent = useApproaches ? ("approaches" as const) : undefined;
 
     if (sessionId === null) {
-      setCreating(true);
-      try {
-        const created = await createSession();
-        queryClient.setQueryData<ChatSessionDetail>(sessionsKeys.detail(created.uuid), {
-          uuid: created.uuid,
-          title: created.title,
-          createdAt: created.createdAt,
-          updatedAt: created.updatedAt,
-          messages: [],
-        });
-        setPendingDraft({
-          text: text || APPROACH_PROMPT,
-          imageDataUrl,
-          intent: intent?.intent,
-        });
-        setSituation("");
-        setImageDataUrl(undefined);
-        setApproachActive(false);
-        void navigate({
-          to: "/s/$sessionId",
-          params: { sessionId: created.uuid },
-          replace: true,
-        });
-      } catch {
-        // Leave the composer intact so the user can retry.
-      } finally {
-        setCreating(false);
-      }
+      await startNewChat({
+        text: text || APPROACH_PROMPT,
+        imageDataUrl,
+        intent,
+      });
       return;
     }
 
@@ -275,8 +297,21 @@ export function CoachChat({ sessionId }: { sessionId: string | null }) {
     setApproachActive(false);
     void sendMessage(
       files && files.length > 0 ? { text: messageText, files } : { text: messageText },
-      intent ? { body: intent } : undefined,
+      intent ? { body: { intent } } : undefined,
     );
+  }
+
+  function saveApproach() {
+    if (busy || creating) return;
+    const text = situation.trim() || CAPTURE_PROMPT;
+    if (sessionId === null) {
+      void startNewChat({ text, imageDataUrl, intent: "capture" });
+      return;
+    }
+    setSituation("");
+    setImageDataUrl(undefined);
+    setApproachActive(false);
+    void sendMessage({ text }, { body: { intent: "capture" } });
   }
 
   function toggleApproaches() {
@@ -345,8 +380,9 @@ export function CoachChat({ sessionId }: { sessionId: string | null }) {
                     </EmptyMedia>
                     <EmptyTitle>Your wingman is here</EmptyTitle>
                     <EmptyDescription>
-                      Tell me the scene or ask anything about the moment. When you want
-                      ready-to-use options, tap + for approach options.
+                      Tell me the scene or ask anything about the moment. Tap + for
+                      ready-to-use approach options, or to save an approach and track
+                      her.
                     </EmptyDescription>
                   </EmptyHeader>
                 </Empty>
@@ -364,7 +400,11 @@ export function CoachChat({ sessionId }: { sessionId: string | null }) {
                         {m.role === "user" ? (
                           <UserParts message={m} />
                         ) : (
-                          <AssistantParts message={m} onBranch={branchFromStarter} />
+                          <AssistantParts
+                            message={m}
+                            onBranch={branchFromStarter}
+                            sessionId={sessionId}
+                          />
                         )}
                       </MessageContent>
                     </Message>
@@ -492,6 +532,7 @@ export function CoachChat({ sessionId }: { sessionId: string | null }) {
                 disabled={busy || creating}
                 approachActive={approachActive}
                 onApproaches={toggleApproaches}
+                onSaveApproach={saveApproach}
                 onAddImage={() => fileRef.current?.click()}
               />
             </InputGroupAddon>
