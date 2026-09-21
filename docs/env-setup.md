@@ -1,10 +1,20 @@
 # Agent: Environment Setup For A New Worktree
 
 You are working in a new worktree. `packages/backend/.env` and
-`packages/frontend/.env` are gitignored, so they do not exist here. Before
-running or testing the app, create them by following these steps exactly.
+`packages/frontend/.env` are gitignored, so they do not exist here, and
+`node_modules` is not shared between worktrees. Before running or testing the
+app, follow these steps exactly.
+
+All URLs in a worktree must be `localhost`. Never use the cloudflared tunnel
+hostnames (e.g. `*.minepicoin.com`).
 
 ## Do this
+
+0. Install dependencies from the worktree root (never inside `packages/*`):
+
+   ```powershell
+   pnpm install
+   ```
 
 1. Find a free backend port. Start at `5000`; if it is in use, bump by one and
    keep checking until free.
@@ -23,24 +33,50 @@ running or testing the app, create them by following these steps exactly.
    ```
 
 3. Read `C:\home\kiki\keys\env-variables.txt` and copy the `MONGODB_URI` and
-   `OPENROUTER_API_KEY` values from it into `packages/backend/.env`.
+   `OPENROUTER_API_KEY` values from it into `packages/backend/.env`. If the
+   file does not exist, ask the user for these two values.
 
-4. In `packages/backend/.env` set `PORT` to the port from step 1,
-   `BETTER_AUTH_URL` to `http://localhost:<port>`, and `FRONTEND_URL` to
-   `http://localhost:5173`. Leave the rest as copied from the example.
+4. In `packages/backend/.env` set `PORT` to the port from step 1 and
+   `BETTER_AUTH_URL` to `http://localhost:<port>`.
 
 5. In `packages/frontend/.env` set `VITE_API_URL` to `http://localhost:<port>`
-   (same port), overwriting the tunnel value from the example.
+   (same backend port), overwriting the tunnel value from the example.
 
-All URLs must be `localhost` in a worktree. Never use the cloudflared tunnel
-hostnames (e.g. `*.minepicoin.com`).
+6. Start the frontend dev server and **read the port it prints** — Vite
+   auto-bumps `5173` → `5174` → … when the port is busy:
+
+   ```powershell
+   pnpm dev:frontend
+   ```
+
+   ```text
+   ➜  Local:   http://localhost:5174/
+   ```
+
+   Set `FRONTEND_URL` in `packages/backend/.env` to that exact printed URL
+   (`http://localhost:5174` in the example). This value drives Express CORS and
+   better-auth `trustedOrigins`, so it must match the frontend origin.
+
+7. Start the backend *after* the frontend, then verify:
+
+   ```powershell
+   pnpm dev:backend
+   ```
+
+   - `GET http://localhost:<port>/health` returns `{"ok":true}`.
+   - Sign in with the credentials in `AGENTS.local.md`.
 
 ## Or run this
 
-From the new worktree's repo root, this performs steps 1–5 in one shot:
+From the new worktree's repo root, this performs steps 0–5 in one shot. The
+frontend port is not known until Vite runs, so it sets `FRONTEND_URL` to
+`http://localhost:5173` as a default — you MUST still do step 6 and overwrite it
+with the port Vite actually prints before starting the backend.
 
 ```powershell
 $keys = "C:\home\kiki\keys\env-variables.txt"
+
+pnpm install
 
 $port = 5000
 while (Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue) { $port++ }
@@ -61,13 +97,15 @@ Set-Content packages\backend\.env $backend
 
 "VITE_API_URL=`"http://localhost:$port`"" | Set-Content packages\frontend\.env
 
-Write-Host "Backend :$port; frontend points at it (localhost only)."
+Write-Host "Backend :$port. Now run pnpm dev:frontend, read the printed port, and set FRONTEND_URL in packages\backend\.env to match before starting the backend."
 ```
 
 ## Constraints
 
 - Never commit `.env`; it is gitignored.
 - Install deps from the repo root with `pnpm install`, never inside `packages/*`.
-- Use `localhost` URLs in a worktree. Do not use the cloudflared tunnel
-  hostnames from `docs/cloudflared-tunnel.md`; those are for the main checkout
-  only.
+- `FRONTEND_URL` must equal the frontend origin Vite actually serves. If Vite
+  bumped to `5174`, use `http://localhost:5174`, not `5173`.
+- Start the backend *after* the frontend so CORS / auth origins are correct.
+- Do not use the cloudflared tunnel hostnames from `docs/cloudflared-tunnel.md`
+  in a worktree; those are for the main checkout only.
