@@ -226,6 +226,10 @@ export function CoachChat({ sessionId }: { sessionId: string | null }) {
       setStopped(isAbort);
       if (sessionId) {
         void queryClient.invalidateQueries({ queryKey: sessionsKeys.detail(sessionId) });
+        // Token usage lands just after the messages write; refetch once more.
+        window.setTimeout(() => {
+          void queryClient.invalidateQueries({ queryKey: sessionsKeys.detail(sessionId) });
+        }, 1200);
       }
       void queryClient.invalidateQueries({ queryKey: sessionsKeys.list });
       if (firstMessageRef.current) {

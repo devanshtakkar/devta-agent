@@ -195,18 +195,36 @@ export interface SessionListItem {
   preview: string;
 }
 
+export interface TokenUsage {
+  model: string;
+  contextLength: number;
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+}
+
 export interface ChatSessionDetail {
   uuid: string;
   title: string;
   createdAt: string;
   updatedAt: string;
   messages: ChatMessage[];
+  usage?: TokenUsage | null;
+}
+
+export interface ModelInfo {
+  model: string;
+  contextLength: number;
 }
 
 export const sessionsKeys = {
   all: ["sessions"] as const,
   list: ["sessions", "list"] as const,
   detail: (uuid: string) => ["sessions", "detail", uuid] as const,
+};
+
+export const modelsKeys = {
+  current: ["models", "current"] as const,
 };
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
@@ -241,6 +259,10 @@ export function getSession(uuid: string) {
 
 export function createSession() {
   return apiFetch<SessionListItem>("/api/sessions", { method: "POST" });
+}
+
+export function getCurrentModel() {
+  return apiFetch<ModelInfo>("/api/models/current");
 }
 
 export function renameSession(uuid: string, title: string) {

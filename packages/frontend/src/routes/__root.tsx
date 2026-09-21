@@ -6,6 +6,7 @@ import { AuthForm } from "@/components/AuthForm";
 import { SessionDrawer } from "@/components/SessionDrawer";
 import { SplashScreen } from "@/components/SplashScreen";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { ModelUsage } from "@/components/ModelUsage";
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
@@ -91,6 +92,7 @@ function RootShell() {
           >
             <HeartIcon />
           </Button>
+          <ModelUsage />
           <ThemeToggle />
           <AlertDialog>
             <AlertDialogTrigger
