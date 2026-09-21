@@ -1,6 +1,6 @@
 import mongoose, { Schema, type InferSchemaType } from "mongoose";
 
-export const CONFIG_KEYS = ["OPENROUTER_MODEL", "EMAIL_FROM"] as const;
+export const CONFIG_KEYS = ["OPENROUTER_MODEL"] as const;
 export type ConfigKey = (typeof CONFIG_KEYS)[number];
 
 const appConfigSchema = new Schema(

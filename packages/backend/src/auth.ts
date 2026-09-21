@@ -5,7 +5,6 @@ import { admin } from "better-auth/plugins";
 import { MongoClient } from "mongodb";
 import type { NextFunction, Request, Response } from "express";
 import { env } from "./env.js";
-import { sendMail } from "./mailer.js";
 
 const client = new MongoClient(env.MONGODB_URI);
 const db = client.db();
@@ -21,25 +20,6 @@ export const auth = betterAuth({
   plugins: [admin()],
   emailAndPassword: {
     enabled: true,
-    sendResetPassword: async ({ user, url }) => {
-      await sendMail({
-        to: user.email,
-        subject: "Reset your password",
-        text: `Click the link to reset your password: ${url}`,
-        html: `<p>Click the link to reset your password:</p><p><a href="${url}">${url}</a></p>`,
-      });
-    },
-  },
-  emailVerification: {
-    sendOnSignUp: true,
-    sendVerificationEmail: async ({ user, url }) => {
-      await sendMail({
-        to: user.email,
-        subject: "Verify your email",
-        text: `Click the link to verify your email: ${url}`,
-        html: `<p>Click the link to verify your email:</p><p><a href="${url}">${url}</a></p>`,
-      });
-    },
   },
 });
 
