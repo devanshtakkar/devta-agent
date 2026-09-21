@@ -10,7 +10,7 @@ import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { z } from "zod";
 import { requireAuth } from "../auth.js";
 import { env } from "../env.js";
-import { getConfig } from "../services/config.js";
+import { getContextLength, resolveModel } from "../services/model-info.js";
 import { SYSTEM_PROMPT, chatTools } from "../ai/coach.js";
 import { ChatSession } from "../models/ChatSession.js";
 
@@ -44,18 +44,18 @@ const MAX_MESSAGES = 100;
 
 type StoredMessage = z.infer<typeof uiMessageSchema>;
 
+interface TokenUsage {
+  model?: string;
+  contextLength?: number;
+  inputTokens?: number;
+  outputTokens?: number;
+  totalTokens?: number;
+}
+
 function getUserId(req: Request): string {
   const user = (req as Request & { user?: { id?: unknown; _id?: unknown } }).user;
   const id = user?.id ?? user?._id;
   return String(id ?? "");
-}
-
-async function resolveModel(): Promise<string> {
-  try {
-    return await getConfig("OPENROUTER_MODEL");
-  } catch {
-    return env.OPENROUTER_MODEL;
-  }
 }
 
 function iso(d: Date | string): string {
@@ -167,6 +167,42 @@ function refreshTitleIfDefault(sessionId: unknown, situation: string) {
   })();
 }
 
+/** Persist the model + token accounting for the turn; never throws. */
+async function persistUsage(
+  sessionId: unknown,
+  modelId: string,
+  result: {
+    usage: Promise<{
+      inputTokens?: number;
+      outputTokens?: number;
+      totalTokens?: number;
+    }>;
+  },
+) {
+  try {
+    const [usage, contextLength] = await Promise.all([
+      result.usage,
+      getContextLength(modelId),
+    ]);
+    await ChatSession.updateOne(
+      { _id: sessionId },
+      {
+        $set: {
+          usage: {
+            model: modelId,
+            contextLength,
+            inputTokens: usage.inputTokens ?? 0,
+            outputTokens: usage.outputTokens ?? 0,
+            totalTokens: usage.totalTokens ?? 0,
+          },
+        },
+      },
+    );
+  } catch (err) {
+    console.error("Failed to persist token usage:", err);
+  }
+}
+
 router.post("/", requireAuth, async (req: Request, res: Response) => {
   const userId = getUserId(req);
   const doc = await ChatSession.create({
@@ -208,7 +244,14 @@ router.get("/:uuid", requireAuth, async (req: Request, res: Response) => {
   const doc = await ChatSession.findOne({
     uuid: parsed.data.uuid,
     userId: getUserId(req),
-  }).lean<{ uuid: string; title: string; messages: StoredMessage[]; createdAt: Date; updatedAt: Date } | null>();
+  }).lean<{
+    uuid: string;
+    title: string;
+    messages: StoredMessage[];
+    createdAt: Date;
+    updatedAt: Date;
+    usage?: TokenUsage | null;
+  } | null>();
   if (!doc) return res.status(404).json({ error: "Session not found" });
   return res.json({
     uuid: doc.uuid,
@@ -216,6 +259,15 @@ router.get("/:uuid", requireAuth, async (req: Request, res: Response) => {
     createdAt: iso(doc.createdAt),
     updatedAt: iso(doc.updatedAt),
     messages: normalizeMessages(doc.messages ?? []),
+    usage: doc.usage
+      ? {
+          model: doc.usage.model ?? "",
+          contextLength: doc.usage.contextLength ?? 0,
+          inputTokens: doc.usage.inputTokens ?? 0,
+          outputTokens: doc.usage.outputTokens ?? 0,
+          totalTokens: doc.usage.totalTokens ?? 0,
+        }
+      : null,
   });
 });
 
@@ -270,8 +322,9 @@ router.post("/:uuid/chat", requireAuth, async (req: Request, res: Response) => {
 
   try {
     const openrouter = createOpenRouter({ apiKey: env.OPENROUTER_API_KEY });
+    const modelId = await resolveModel();
     const result = streamText({
-      model: openrouter(await resolveModel()),
+      model: openrouter(modelId),
       system: SYSTEM_PROMPT,
       tools: chatTools,
       toolChoice:
@@ -297,6 +350,9 @@ router.post("/:uuid/chat", requireAuth, async (req: Request, res: Response) => {
         } catch (err) {
           console.error("Failed to persist chat messages:", err);
         }
+        // Usage settles slightly after the UI stream; persist separately so a
+        // slow/absent usage report never blocks message persistence.
+        void persistUsage(session._id, modelId, result);
       },
     });
 

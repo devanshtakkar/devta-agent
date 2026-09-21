@@ -10,12 +10,24 @@ const messageSubSchema = new Schema(
   { _id: false },
 );
 
+const usageSubSchema = new Schema(
+  {
+    model: { type: String },
+    contextLength: { type: Number },
+    inputTokens: { type: Number },
+    outputTokens: { type: Number },
+    totalTokens: { type: Number },
+  },
+  { _id: false },
+);
+
 const chatSessionSchema = new Schema(
   {
     uuid: { type: String, required: true, unique: true, index: true },
     userId: { type: String, required: true, index: true },
     title: { type: String, required: true, default: "New chat" },
     messages: { type: [messageSubSchema], default: [] },
+    usage: { type: usageSubSchema, default: undefined },
   },
   { timestamps: true },
 );

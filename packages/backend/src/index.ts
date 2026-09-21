@@ -8,6 +8,7 @@ import { connectDb } from "./db.js";
 import { seedDefaults } from "./services/config.js";
 import sessionsRouter from "./routes/sessions.js";
 import configRouter from "./routes/config.js";
+import modelsRouter from "./routes/models.js";
 
 const app: Express = express();
 
@@ -26,6 +27,7 @@ app.all("/api/auth/*", authHandler);
 
 app.use("/api/sessions", sessionsRouter);
 app.use("/api/config", configRouter);
+app.use("/api/models", modelsRouter);
 
 async function main() {
   const mongo = await connectDb();
