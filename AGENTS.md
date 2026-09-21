@@ -16,15 +16,31 @@ Devta is a personal wingman PWA (mobile-only) for dating confidence:
   public/social scenarios (cafe, restaurant, street, party, etc.).
 - Uses AI to brainstorm 4–5 context-aware conversation starters to choose from,
   with branch-out follow-ups for how the chat could proceed.
-- Later stages: track connections and interaction history, and get AI help with
-  respectful next steps as dating progresses toward genuine, consensual relationships.
 - Architecture: `packages/frontend/` (Vite + React + PWA) talks to `packages/backend/`
   (Express + TypeScript + MongoDB + Vercel AI SDK via OpenRouter).
-- All coaching advice must be respectful, consent-first, women psychology backed to stir up romantic feelings in the women for me, bending the rules slightly in my favour as long as they don't make me creep but still let me have succesfully dating life by not letting me get stuck in friendzone or as a "nice guy". Always include a graceful-exit option for me. The GOAL is to have a relationship and marriage eventaully.
 - Core UX target: speed-to-action. The user is in a live moment and must get an
   actionable idea in seconds: one-tap quick actions, minimal typing/voice-first
   input, streaming + skimmable responses (opener line first, short why, exact
   next move), big touch targets, offline-tolerant PWA shell.
+
+### Goal and how we play
+
+Outcome we want: turn real approaches into a healthy dating life — move each
+promising connection through talking, dates and intimacy into a committed
+relationship and, eventually, marriage. Success is connections advanced and
+kept, not approaches collected.
+
+How we play: open politely in the moment, always with a graceful exit. Give
+every interaction one clear next move that advances the connection without
+pressure. Build genuine attraction — confidence, leading, playful tension,
+physical escalation, emotional connection, women-psychology-backed — instead of
+approval-seeking; avoid the friendzone and "nice guy" traps. Consent-first, and
+back off gracefully when interest isn't there. After each real interaction, log
+it in the tracker and ask the agent for the next move, so coaching resumes from
+where we left off.
+
+Stages: approached → talking → contact → dating → intimate → relationship →
+engaged → married (terminal: failed / ghosted).
 
 ## Rules
 
