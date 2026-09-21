@@ -67,81 +67,86 @@ export function ModelUsage() {
       </Button>
 
       <Drawer open={open} onOpenChange={setOpen}>
-        <DrawerContent className="p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
-          <DrawerTitle className="font-heading text-lg font-semibold">
-            Context window
-          </DrawerTitle>
-          <DrawerDescription className="mt-0.5">
-            {sessionId
-              ? "Prompt tokens this chat has used against the model's limit."
-              : "Start a chat to see its context usage."}
-          </DrawerDescription>
+        <DrawerContent
+          className="p-0"
+          style={{ borderRadius: "1.5rem" }}
+        >
+          <div className="p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+            <DrawerTitle className="font-heading text-lg font-semibold">
+              Context window
+            </DrawerTitle>
+            <DrawerDescription className="mt-0.5">
+              {sessionId
+                ? "Prompt tokens this chat has used against the model's limit."
+                : "Start a chat to see its context usage."}
+            </DrawerDescription>
 
-          <div className="mt-4">
-            <div className="flex items-end justify-between gap-2">
-              <span className="text-2xl font-semibold tabular-nums">
-                {formatTokens(used)}
-                {contextLength ? (
-                  <span className="text-muted-foreground text-sm font-normal">
-                    {` / ${formatTokens(contextLength)}`}
-                  </span>
-                ) : null}
-              </span>
-              <span className="text-muted-foreground text-sm tabular-nums">
-                {percent}%
-              </span>
+            <div className="mt-4">
+              <div className="flex items-end justify-between gap-2">
+                <span className="text-2xl font-semibold tabular-nums">
+                  {formatTokens(used)}
+                  {contextLength ? (
+                    <span className="text-muted-foreground text-sm font-normal">
+                      {` / ${formatTokens(contextLength)}`}
+                    </span>
+                  ) : null}
+                </span>
+                <span className="text-muted-foreground text-sm tabular-nums">
+                  {percent}%
+                </span>
+              </div>
+              <div className="bg-muted mt-2 h-2 w-full overflow-hidden rounded-full">
+                <div
+                  className={cn(
+                    "h-full rounded-full transition-[width] duration-500",
+                    percent >= 90
+                      ? "bg-destructive"
+                      : percent >= 70
+                        ? "bg-amber-500"
+                        : "bg-primary",
+                  )}
+                  style={{ width: `${percent}%` }}
+                />
+              </div>
             </div>
-            <div className="bg-muted mt-2 h-2 w-full overflow-hidden rounded-full">
-              <div
-                className={cn(
-                  "h-full rounded-full transition-[width] duration-500",
-                  percent >= 90
-                    ? "bg-destructive"
-                    : percent >= 70
-                      ? "bg-amber-500"
-                      : "bg-primary",
-                )}
-                style={{ width: `${percent}%` }}
-              />
-            </div>
-          </div>
 
-          <dl className="mt-4 grid grid-cols-2 gap-2 text-sm">
-            <div className="border-border rounded-xl border px-3 py-2">
-              <dt className="text-muted-foreground text-xs">Model</dt>
-              <dd className="mt-0.5 truncate font-medium" title={model}>
-                {model ?? "Unknown"}
-              </dd>
-            </div>
-            <div className="border-border rounded-xl border px-3 py-2">
-              <dt className="text-muted-foreground text-xs">Remaining</dt>
-              <dd className="mt-0.5 font-medium tabular-nums">
-                {remaining === undefined ? "—" : formatTokens(remaining)}
-              </dd>
-            </div>
-            <div className="border-border rounded-xl border px-3 py-2">
-              <dt className="text-muted-foreground text-xs">Output (last reply)</dt>
-              <dd className="mt-0.5 font-medium tabular-nums">
-                {formatTokens(usage?.outputTokens ?? 0)}
-              </dd>
-            </div>
-            <div className="border-border rounded-xl border px-3 py-2">
-              <dt className="text-muted-foreground text-xs">Total billed</dt>
-              <dd className="mt-0.5 font-medium tabular-nums">
-                {formatTokens(usage?.totalTokens ?? 0)}
-              </dd>
-            </div>
-          </dl>
+            <dl className="mt-4 grid grid-cols-2 gap-2 text-sm">
+              <div className="border-border rounded-xl border px-3 py-2">
+                <dt className="text-muted-foreground text-xs">Model</dt>
+                <dd className="mt-0.5 truncate font-medium" title={model}>
+                  {model ?? "Unknown"}
+                </dd>
+              </div>
+              <div className="border-border rounded-xl border px-3 py-2">
+                <dt className="text-muted-foreground text-xs">Remaining</dt>
+                <dd className="mt-0.5 font-medium tabular-nums">
+                  {remaining === undefined ? "—" : formatTokens(remaining)}
+                </dd>
+              </div>
+              <div className="border-border rounded-xl border px-3 py-2">
+                <dt className="text-muted-foreground text-xs">Output (last reply)</dt>
+                <dd className="mt-0.5 font-medium tabular-nums">
+                  {formatTokens(usage?.outputTokens ?? 0)}
+                </dd>
+              </div>
+              <div className="border-border rounded-xl border px-3 py-2">
+                <dt className="text-muted-foreground text-xs">Total billed</dt>
+                <dd className="mt-0.5 font-medium tabular-nums">
+                  {formatTokens(usage?.totalTokens ?? 0)}
+                </dd>
+              </div>
+            </dl>
 
-          {modelQuery.isError && !usage && (
+            {modelQuery.isError && !usage && (
+              <p className="text-muted-foreground mt-3 text-xs">
+                Couldn&apos;t reach the model info service.
+              </p>
+            )}
             <p className="text-muted-foreground mt-3 text-xs">
-              Couldn&apos;t reach the model info service.
+              Updates after each reply. &ldquo;Used&rdquo; is the prompt size sent on
+              the last turn.
             </p>
-          )}
-          <p className="text-muted-foreground mt-3 text-xs">
-            Updates after each reply. &ldquo;Used&rdquo; is the prompt size sent on
-            the last turn.
-          </p>
+          </div>
         </DrawerContent>
       </Drawer>
     </>
