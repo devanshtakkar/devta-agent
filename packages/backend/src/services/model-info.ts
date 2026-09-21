@@ -32,11 +32,24 @@ async function loadContextLengths(): Promise<Map<string, number>> {
   return lengths;
 }
 
+/**
+ * OpenRouter model ids may carry routing/feature suffixes (`:nitro`, `:floor`,
+ * `:free`, `:batch`, ...) and a `~` prefix, which are not part of the base
+ * model id listed in the models endpoint. Strip them for lookup.
+ */
+function baseModelId(modelId: string): string {
+  return modelId.replace(/^~/, "").split(":")[0];
+}
+
 /** Context length for a model id, falling back to a sane default. */
 export async function getContextLength(modelId: string): Promise<number> {
   try {
     const lengths = await loadContextLengths();
-    return lengths.get(modelId) ?? DEFAULT_CONTEXT_LENGTH;
+    return (
+      lengths.get(modelId) ??
+      lengths.get(baseModelId(modelId)) ??
+      DEFAULT_CONTEXT_LENGTH
+    );
   } catch (err) {
     console.error("Failed to fetch model context lengths:", err);
     return DEFAULT_CONTEXT_LENGTH;
