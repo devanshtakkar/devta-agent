@@ -2,6 +2,17 @@
    Keep shadcn-managed `index.css` untouched — put custom CSS here and import
    it in `main.tsx` AFTER `index.css` so it wins on equal specificity. */
 
+/* Mobile base text size — shadcn-managed `index.css` drops the root font to
+   16px below 1024px (a desktop-template default), which reads too small on
+   the phones this PWA targets. Restore the 18px base so every `rem`-based
+   size scales up, including the `.md` chat renderer. Same `:root` specificity
+   as `index.css`, and this file loads later, so it wins. */
+@media (max-width: 1024px) {
+  :root {
+    font-size: 18px;
+  }
+}
+
 /* Explicit light override — must cascade after the `prefers-color-scheme`
    media block in `index.css` so a manual "light" choice wins over a dark
    OS setting. Values mirror the `:root` light tokens in `index.css`. */

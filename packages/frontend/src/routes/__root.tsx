@@ -7,6 +7,17 @@ import { SessionDrawer } from "@/components/SessionDrawer";
 import { SplashScreen } from "@/components/SplashScreen";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 function RootShell() {
   const { data: session, isPending } = useSession();
@@ -71,20 +82,34 @@ function RootShell() {
           </span>
         </span>
         <div className="flex items-center gap-2">
-          <span
-            className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${online ? "bg-emerald-500/15 text-emerald-600" : "bg-amber-500/15 text-amber-600"}`}
-          >
-            {online ? "Online" : "Offline"}
-          </span>
           <ThemeToggle />
-          <Button
-            size="icon-sm"
-            variant="ghost"
-            aria-label="Sign out"
-            onClick={() => void authClient.signOut()}
-          >
-            <LogOut />
-          </Button>
+          <AlertDialog>
+            <AlertDialogTrigger
+              render={
+                <Button size="icon-sm" variant="ghost" aria-label="Sign out" />
+              }
+            >
+              <LogOut />
+            </AlertDialogTrigger>
+            <AlertDialogContent size="sm">
+              <AlertDialogHeader>
+                <AlertDialogTitle>Sign out?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  You&apos;ll return to the sign-in screen. Your saved chats
+                  stay on your account.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  variant="destructive"
+                  onClick={() => void authClient.signOut()}
+                >
+                  Sign out
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
       </header>
       {!online && (

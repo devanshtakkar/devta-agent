@@ -4,7 +4,7 @@ import { useChat } from "@ai-sdk/react";
 import { useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  SendIcon,
+  SendHorizontalIcon,
   SparklesIcon,
   SquareIcon,
   TriangleAlertIcon,
@@ -508,7 +508,7 @@ export function CoachChat({ sessionId }: { sessionId: string | null }) {
                   disabled={(!situation.trim() && !(approachActive && !isFirstMessage)) || creating}
                   onClick={() => void submit()}
                 >
-                  {creating ? <Spinner /> : <SendIcon />}
+                  {creating ? <Spinner /> : <SendHorizontalIcon />}
                 </InputGroupButton>
               )}
             </InputGroupAddon>
