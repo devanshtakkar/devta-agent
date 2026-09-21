@@ -19,6 +19,12 @@ export interface ApproachInput {
   starters: Starter[];
 }
 
+export const RISK_LABELS: Record<Starter["risk"], string> = {
+  low: "Low risk",
+  medium: "Medium risk",
+  high: "Higher risk",
+};
+
 /** Shape of the `tool-proposeApproaches` UI part while streaming/completed. */
 export interface ApproachToolPart {
   type: "tool-proposeApproaches";
