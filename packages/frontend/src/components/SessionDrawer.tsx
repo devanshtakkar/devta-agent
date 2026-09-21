@@ -7,6 +7,7 @@ import {
   EllipsisVerticalIcon,
   MessageSquareIcon,
   MessageSquarePlusIcon,
+  SettingsIcon,
   Trash2Icon,
   XIcon,
 } from "lucide-react";
@@ -410,6 +411,18 @@ export function SessionDrawer({
               })}
             </ul>
           </div>
+
+          <footer className="border-border/60 border-t px-3 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+            <Button
+              variant="ghost"
+              className="h-11 w-full justify-start text-[15px]"
+              nativeButton={false}
+              render={<Link to="/settings" onClick={close} />}
+            >
+              <SettingsIcon data-icon="inline-start" />
+              Settings
+            </Button>
+          </footer>
         </div>
 
         <AlertDialog
