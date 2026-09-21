@@ -52,6 +52,140 @@ export interface BranchToolPart {
   errorText?: string;
 }
 
+export const CONNECTION_STAGES = [
+  "approached",
+  "talking",
+  "contact",
+  "dating",
+  "intimate",
+  "relationship",
+  "engaged",
+  "married",
+  "failed",
+  "ghosted",
+] as const;
+
+export type ConnectionStage = (typeof CONNECTION_STAGES)[number];
+
+export const CONNECTION_EVENT_TYPES = [
+  "approach",
+  "reply",
+  "number",
+  "date_planned",
+  "date_done",
+  "intimacy",
+  "stage_change",
+  "failure",
+  "note",
+] as const;
+
+export type ConnectionEventType = (typeof CONNECTION_EVENT_TYPES)[number];
+
+export const STAGE_LABELS: Record<ConnectionStage, string> = {
+  approached: "Approached",
+  talking: "Talking",
+  contact: "Contact",
+  dating: "Dating",
+  intimate: "Intimate",
+  relationship: "Relationship",
+  engaged: "Engaged",
+  married: "Married",
+  failed: "Failed",
+  ghosted: "Ghosted",
+};
+
+export interface ConnectionEvent {
+  id: string;
+  type: ConnectionEventType;
+  title: string;
+  details?: string;
+  occurredAt: string;
+  location?: string;
+  sessionId?: string;
+  toolCallId?: string;
+}
+
+export interface Connection {
+  uuid: string;
+  originSessionId?: string;
+  name: string;
+  stage: ConnectionStage;
+  summary?: string;
+  metLocation?: string;
+  metAt?: string;
+  approachOpener?: string;
+  closedReason?: string;
+  notes?: string;
+  rating?: number;
+  events: ConnectionEvent[];
+  savedToolCallIds: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Fields the agent proposes for a tracked connection (nothing saved yet). */
+export interface ConnectionDraft {
+  name: string;
+  stage: ConnectionStage;
+  summary?: string;
+  whatHappened?: string;
+  metLocation?: string;
+  metAt?: string;
+  approachOpener?: string;
+  nextMove?: string;
+  contact?: { type: "number" | "social" | "none"; value?: string };
+  targetConnectionId?: string;
+}
+
+/** Shape of the `tool-proposeConnection` UI part while streaming/completed. */
+export interface ConnectionToolPart {
+  type: "tool-proposeConnection";
+  toolCallId: string;
+  state: "input-streaming" | "input-available" | "output-available" | "output-error";
+  input?: Partial<ConnectionDraft>;
+  output?: unknown;
+  errorText?: string;
+}
+
+export interface CreateConnectionBody {
+  originSessionId?: string;
+  name: string;
+  stage?: ConnectionStage;
+  summary?: string;
+  metLocation?: string;
+  metAt?: string;
+  approachOpener?: string;
+  notes?: string;
+  toolCallId?: string;
+  event?: {
+    type: ConnectionEventType;
+    title: string;
+    details?: string;
+    occurredAt?: string;
+    location?: string;
+    sessionId?: string;
+    toolCallId?: string;
+  };
+}
+
+export interface AddEventBody {
+  type: ConnectionEventType;
+  title: string;
+  details?: string;
+  occurredAt?: string;
+  location?: string;
+  sessionId?: string;
+  toolCallId?: string;
+  stage?: ConnectionStage;
+}
+
+export const connectionsKeys = {
+  all: ["connections"] as const,
+  list: (sessionId?: string) =>
+    ["connections", "list", sessionId ?? "all"] as const,
+  detail: (uuid: string) => ["connections", "detail", uuid] as const,
+};
+
 export interface SessionListItem {
   uuid: string;
   title: string;
@@ -118,6 +252,51 @@ export function renameSession(uuid: string, title: string) {
 
 export function deleteSession(uuid: string) {
   return apiFetch<void>(`/api/sessions/${uuid}`, { method: "DELETE" });
+}
+
+export function listConnections(sessionId?: string) {
+  const qs = sessionId ? `?sessionId=${encodeURIComponent(sessionId)}` : "";
+  return apiFetch<{ connections: Connection[] }>(`/api/connections${qs}`).then(
+    (d) => d.connections,
+  );
+}
+
+export function getConnection(uuid: string) {
+  return apiFetch<Connection>(`/api/connections/${uuid}`);
+}
+
+export function createConnection(body: CreateConnectionBody) {
+  return apiFetch<Connection>("/api/connections", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function addConnectionEvent(uuid: string, body: AddEventBody) {
+  return apiFetch<Connection>(`/api/connections/${uuid}/events`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function updateConnection(
+  uuid: string,
+  body: Partial<CreateConnectionBody> & { closedReason?: string },
+) {
+  return apiFetch<Connection>(`/api/connections/${uuid}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+
+export function deleteConnection(uuid: string) {
+  return apiFetch<void>(`/api/connections/${uuid}`, { method: "DELETE" });
+}
+
+export function deleteConnectionEvent(uuid: string, eventId: string) {
+  return apiFetch<Connection>(`/api/connections/${uuid}/events/${eventId}`, {
+    method: "DELETE",
+  });
 }
 
 /** Downscale an image file to a compact JPEG data URL for AI context. */
