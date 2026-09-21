@@ -81,7 +81,7 @@ function ConnectionView() {
         </div>
       )}
 
-      <h2 className="font-heading mt-6 mb-2 text-sm font-medium tracking-tight">
+      <h2 className="font-heading section-heading text-sm font-medium tracking-tight">
         Timeline
       </h2>
       {connection.events.length === 0 ? (

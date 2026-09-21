@@ -10,7 +10,6 @@ import {
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
-  CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
@@ -65,7 +64,7 @@ function ConnectionsView() {
           </EmptyHeader>
         </Empty>
       ) : (
-        <div className="flex flex-col gap-3 pb-4">
+        <div className="mt-2 flex flex-col gap-3 pb-4">
           {connections.map((c) => (
             <Link
               key={c.uuid}
@@ -81,14 +80,12 @@ function ConnectionsView() {
                     {c.metLocation && <span className="truncate">{c.metLocation}</span>}
                   </CardDescription>
                   <CardTitle>{c.name}</CardTitle>
-                </CardHeader>
-                {(c.summary || c.events.length > 0) && (
-                  <CardContent>
+                  {(c.summary || c.events.length > 0) && (
                     <p className="text-muted-foreground line-clamp-2 text-sm">
                       {c.summary || c.events[c.events.length - 1]?.title}
                     </p>
-                  </CardContent>
-                )}
+                  )}
+                </CardHeader>
               </Card>
             </Link>
           ))}
