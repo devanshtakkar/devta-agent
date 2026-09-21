@@ -2,7 +2,18 @@ import { DefaultChatTransport, type UIMessage } from "ai";
 
 const API_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? "http://localhost:3001";
 
-export type ChatMessage = UIMessage;
+/** Metadata the API attaches to each assistant message. */
+export interface ChatMessageMetadata {
+  model?: string;
+}
+
+export type ChatMessage = UIMessage<ChatMessageMetadata>;
+
+/** Model that generated an assistant message, when the API reported one. */
+export function messageModel(message: ChatMessage): string | undefined {
+  const model = message.metadata?.model;
+  return typeof model === "string" && model ? model : undefined;
+}
 
 export interface Starter {
   id: string;
@@ -189,6 +200,7 @@ export const connectionsKeys = {
 export interface SessionListItem {
   uuid: string;
   title: string;
+  model?: string | null;
   updatedAt: string;
   createdAt: string;
   messageCount: number;
@@ -206,6 +218,7 @@ export interface TokenUsage {
 export interface ChatSessionDetail {
   uuid: string;
   title: string;
+  model?: string | null;
   createdAt: string;
   updatedAt: string;
   messages: ChatMessage[];
@@ -217,6 +230,12 @@ export interface ModelInfo {
   contextLength: number;
 }
 
+/** Models offered in the picker + the default used for new chats. */
+export interface ModelSettings {
+  models: string[];
+  defaultModel: string;
+}
+
 export const sessionsKeys = {
   all: ["sessions"] as const,
   list: ["sessions", "list"] as const,
@@ -225,6 +244,7 @@ export const sessionsKeys = {
 
 export const modelsKeys = {
   current: ["models", "current"] as const,
+  settings: ["models", "settings"] as const,
 };
 
 export class ApiError extends Error {
@@ -261,7 +281,7 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
 
 /** Chat transport backed by the streaming `/api/sessions/:uuid/chat` endpoint. */
 export function chatTransport(uuid: string) {
-  return new DefaultChatTransport({
+  return new DefaultChatTransport<ChatMessage>({
     api: `${API_URL}/api/sessions/${uuid}/chat`,
     credentials: "include",
   });
@@ -283,11 +303,30 @@ export function getCurrentModel() {
   return apiFetch<ModelInfo>("/api/models/current");
 }
 
+export function getModelSettings() {
+  return apiFetch<ModelSettings>("/api/models");
+}
+
+export function saveModelSettings(settings: ModelSettings) {
+  return apiFetch<ModelSettings>("/api/models", {
+    method: "PUT",
+    body: JSON.stringify(settings),
+  });
+}
+
 export function renameSession(uuid: string, title: string) {
   return apiFetch<{ uuid: string; title: string }>(`/api/sessions/${uuid}`, {
     method: "PATCH",
     body: JSON.stringify({ title }),
   });
+}
+
+/** Remember the picker's model choice on the session itself. */
+export function setSessionModel(uuid: string, model: string) {
+  return apiFetch<{ uuid: string; title: string; model?: string | null }>(
+    `/api/sessions/${uuid}`,
+    { method: "PATCH", body: JSON.stringify({ model }) },
+  );
 }
 
 export interface ActiveConnectionInfo {

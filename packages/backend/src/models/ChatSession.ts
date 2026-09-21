@@ -26,6 +26,7 @@ const chatSessionSchema = new Schema(
     uuid: { type: String, required: true, unique: true, index: true },
     userId: { type: String, required: true, index: true },
     title: { type: String, required: true, default: "New chat" },
+    model: { type: String },
     messages: { type: [messageSubSchema], default: [] },
     usage: { type: usageSubSchema, default: undefined },
   },

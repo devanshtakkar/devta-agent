@@ -10,7 +10,11 @@ import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { z } from "zod";
 import { requireAuth } from "../auth.js";
 import { env } from "../env.js";
-import { getContextLength, resolveModel } from "../services/model-info.js";
+import {
+  getContextLength,
+  isValidModelId,
+  resolveModel,
+} from "../services/model-info.js";
 import { SYSTEM_PROMPT, chatTools } from "../ai/coach.js";
 import { ChatSession } from "../models/ChatSession.js";
 import { Connection } from "../models/Connection.js";
@@ -22,9 +26,21 @@ const uuidParamSchema = z.object({ uuid: z.string().uuid("invalid session id") }
 /** Typed override required to delete a chat that is linked to a connection. */
 const DELETE_CONFIRMATION = "CONFIRM";
 
-const renameBodySchema = z.object({
-  title: z.string().trim().min(1, "title is required").max(80),
-});
+const modelIdSchema = z
+  .string()
+  .trim()
+  .min(1, "model is required")
+  .max(160)
+  .refine(isValidModelId, "invalid model id");
+
+const patchBodySchema = z
+  .object({
+    title: z.string().trim().min(1, "title is required").max(80).optional(),
+    model: modelIdSchema.optional(),
+  })
+  .refine((body) => body.title !== undefined || body.model !== undefined, {
+    message: "title or model is required",
+  });
 
 const messagePartSchema = z.object({ type: z.string() }).passthrough();
 
@@ -38,6 +54,7 @@ const uiMessageSchema = z.object({
 const chatBodySchema = z.object({
   messages: z.array(uiMessageSchema).min(1, "messages are required"),
   intent: z.enum(["approaches", "branches", "capture"]).optional(),
+  model: modelIdSchema.optional(),
 });
 
 const titleSchema = z.object({
@@ -231,7 +248,7 @@ function toListItem(doc: {
 }
 
 /** Fire-and-forget AI title for the first message; never throws. */
-function refreshTitleIfDefault(sessionId: unknown, situation: string) {
+function refreshTitleIfDefault(sessionId: unknown, situation: string, modelId: string) {
   void (async () => {
     try {
       const session = await ChatSession.findById(sessionId).lean<{
@@ -240,7 +257,7 @@ function refreshTitleIfDefault(sessionId: unknown, situation: string) {
       if (!session || session.title !== "New chat") return;
       const openrouter = createOpenRouter({ apiKey: env.OPENROUTER_API_KEY });
       const { object } = await generateObject({
-        model: openrouter(await resolveModel()),
+        model: openrouter(modelId),
         schema: titleSchema,
         system:
           "Generate a very short chat title (5 words max, plain text, no quotes, no emoji) summarising the user's request.",
@@ -300,11 +317,13 @@ router.post("/", requireAuth, async (req: Request, res: Response) => {
     uuid: randomUUID(),
     userId,
     title: "New chat",
+    model: await resolveModel(),
     messages: [],
   });
   return res.status(201).json({
     uuid: doc.uuid,
     title: doc.title,
+    model: doc.model ?? null,
     messageCount: 0,
     preview: "",
     createdAt: doc.createdAt.toISOString(),
@@ -338,6 +357,7 @@ router.get("/:uuid", requireAuth, async (req: Request, res: Response) => {
   }).lean<{
     uuid: string;
     title: string;
+    model?: string | null;
     messages: StoredMessage[];
     createdAt: Date;
     updatedAt: Date;
@@ -347,6 +367,7 @@ router.get("/:uuid", requireAuth, async (req: Request, res: Response) => {
   return res.json({
     uuid: doc.uuid,
     title: doc.title,
+    model: doc.model ?? null,
     createdAt: iso(doc.createdAt),
     updatedAt: iso(doc.updatedAt),
     messages: normalizeMessages(doc.messages ?? []),
@@ -365,17 +386,20 @@ router.get("/:uuid", requireAuth, async (req: Request, res: Response) => {
 router.patch("/:uuid", requireAuth, async (req: Request, res: Response) => {
   const parsedParam = uuidParamSchema.safeParse(req.params);
   if (!parsedParam.success) return res.status(400).json({ error: "Invalid session id" });
-  const parsedBody = renameBodySchema.safeParse(req.body);
+  const parsedBody = patchBodySchema.safeParse(req.body);
   if (!parsedBody.success) {
     return res.status(400).json({ error: "Invalid request", details: parsedBody.error.flatten() });
   }
+  const update: { title?: string; model?: string } = {};
+  if (parsedBody.data.title !== undefined) update.title = parsedBody.data.title;
+  if (parsedBody.data.model !== undefined) update.model = parsedBody.data.model;
   const doc = await ChatSession.findOneAndUpdate(
     { uuid: parsedParam.data.uuid, userId: getUserId(req) },
-    { $set: { title: parsedBody.data.title } },
+    { $set: update },
     { new: true },
-  ).lean<{ uuid: string; title: string } | null>();
+  ).lean<{ uuid: string; title: string; model?: string | null } | null>();
   if (!doc) return res.status(404).json({ error: "Session not found" });
-  return res.json({ uuid: doc.uuid, title: doc.title });
+  return res.json({ uuid: doc.uuid, title: doc.title, model: doc.model ?? null });
 });
 
 router.delete("/:uuid", requireAuth, async (req: Request, res: Response) => {
@@ -430,6 +454,15 @@ router.post("/:uuid/chat", requireAuth, async (req: Request, res: Response) => {
   const incoming = normalizeMessages(parsedBody.data.messages) as UIMessage[];
   const intent = parsedBody.data.intent;
   const isFirstUserMessage = (session.messages?.length ?? 0) === 0;
+  // The picker's choice wins; otherwise the session's model, then the default.
+  const modelId =
+    parsedBody.data.model ?? session.model ?? (await resolveModel());
+  if (session.model !== modelId) {
+    await ChatSession.updateOne(
+      { _id: session._id },
+      { $set: { model: modelId } },
+    );
+  }
 
   const oversizedImage = incoming.some((m) =>
     (m.parts ?? []).some((p) => isImagePart(p) && imageBytes(p) > MAX_IMAGE_BYTES),
@@ -442,7 +475,6 @@ router.post("/:uuid/chat", requireAuth, async (req: Request, res: Response) => {
 
   try {
     const openrouter = createOpenRouter({ apiKey: env.OPENROUTER_API_KEY });
-    const modelId = await resolveModel();
     const result = streamText({
       model: openrouter(modelId),
       system: SYSTEM_PROMPT,
@@ -462,9 +494,25 @@ router.post("/:uuid/chat", requireAuth, async (req: Request, res: Response) => {
     result.pipeUIMessageStreamToResponse(res, {
       originalMessages: incoming,
       sendReasoning: true,
+      // Attribute the streamed response to the model that generated it, so the
+      // UI can label the message (and reloads keep the label).
+      messageMetadata: () => ({ model: modelId }),
       onFinish: async ({ messages }) => {
         try {
-          const stored = capStoredImages(messages.map(toStoredMessage));
+          const tagged = messages.map((m, i) =>
+            i === messages.length - 1 && m.role === "assistant"
+              ? {
+                  ...m,
+                  metadata: {
+                    ...(typeof m.metadata === "object" && m.metadata !== null
+                      ? m.metadata
+                      : {}),
+                    model: modelId,
+                  },
+                }
+              : m,
+          );
+          const stored = capStoredImages(tagged.map(toStoredMessage));
           await ChatSession.updateOne(
             { _id: session._id },
             { $set: { messages: stored } },
@@ -481,7 +529,7 @@ router.post("/:uuid/chat", requireAuth, async (req: Request, res: Response) => {
     if (isFirstUserMessage) {
       const first = incoming.find((m) => m.role === "user");
       const text = first ? messageText(toStoredMessage(first)) : "";
-      if (text) refreshTitleIfDefault(session._id, text);
+      if (text) refreshTitleIfDefault(session._id, text, modelId);
     }
   } catch (err) {
     console.error("POST /api/sessions/:uuid/chat failed:", err);

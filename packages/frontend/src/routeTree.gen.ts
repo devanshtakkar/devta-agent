@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as ConnectionsIndexRouteImport } from './routes/connections.index'
 import { Route as ConnectionsConnectionIdRouteImport } from './routes/connections.$connectionId'
 import { Route as SSessionIdRouteImport } from './routes/s.$sessionId'
@@ -17,6 +18,11 @@ import { Route as SSessionIdRouteImport } from './routes/s.$sessionId'
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ConnectionsIndexRoute = ConnectionsIndexRouteImport.update({
@@ -37,12 +43,14 @@ const SSessionIdRoute = SSessionIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/settings': typeof SettingsRoute
   '/connections/$connectionId': typeof ConnectionsConnectionIdRoute
   '/s/$sessionId': typeof SSessionIdRoute
   '/connections/': typeof ConnectionsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/settings': typeof SettingsRoute
   '/connections/$connectionId': typeof ConnectionsConnectionIdRoute
   '/s/$sessionId': typeof SSessionIdRoute
   '/connections': typeof ConnectionsIndexRoute
@@ -50,6 +58,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/settings': typeof SettingsRoute
   '/connections/$connectionId': typeof ConnectionsConnectionIdRoute
   '/s/$sessionId': typeof SSessionIdRoute
   '/connections/': typeof ConnectionsIndexRoute
@@ -57,12 +66,22 @@ export interface FileRoutesById {
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    '/' | '/connections/$connectionId' | '/s/$sessionId' | '/connections/'
+    | '/'
+    | '/settings'
+    | '/connections/$connectionId'
+    | '/s/$sessionId'
+    | '/connections/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/connections/$connectionId' | '/s/$sessionId' | '/connections'
+  to:
+    | '/'
+    | '/settings'
+    | '/connections/$connectionId'
+    | '/s/$sessionId'
+    | '/connections'
   id:
     | '__root__'
     | '/'
+    | '/settings'
     | '/connections/$connectionId'
     | '/s/$sessionId'
     | '/connections/'
@@ -70,6 +89,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  SettingsRoute: typeof SettingsRoute
   ConnectionsConnectionIdRoute: typeof ConnectionsConnectionIdRoute
   SSessionIdRoute: typeof SSessionIdRoute
   ConnectionsIndexRoute: typeof ConnectionsIndexRoute
@@ -82,6 +102,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/connections/': {
@@ -110,6 +137,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  SettingsRoute: SettingsRoute,
   ConnectionsConnectionIdRoute: ConnectionsConnectionIdRoute,
   SSessionIdRoute: SSessionIdRoute,
   ConnectionsIndexRoute: ConnectionsIndexRoute,
