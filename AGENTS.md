@@ -51,3 +51,4 @@ engaged → married (terminal: failed / ghosted).
 3. When testing the app, use the login credentials in `AGENTS.local.md` (gitignored, never
    commit it). If those credentials do not work, ask the user for updated ones — do not guess
    or create a new account.
+ 
