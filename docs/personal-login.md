@@ -17,7 +17,7 @@ better-auth admin API, then you sign in with it.
 ## Prerequisites
 
 - Backend `.env` is configured (`MONGODB_URI`, `BETTER_AUTH_SECRET`,
-  `BETTER_AUTH_URL`, SMTP vars). See `packages/backend/.env.example`.
+  `BETTER_AUTH_URL`). See `packages/backend/.env.example`.
 - Dependencies installed from the repo root: `pnpm install`.
 
 ## Create your user (run once)
@@ -47,11 +47,10 @@ If the email already exists, the script exits with
 
 1. Start the backend and frontend (`pnpm dev:backend`, `pnpm dev:frontend`).
 2. Open the frontend and enter the email + password you used in the script.
-3. Password reset / verification emails (if triggered) come from your SMTP
-   sender configured in the backend `.env`.
 
 ## Notes
 
-- To change your password later, use the normal reset-password flow or
-  re-run the flow via `authClient.admin.setUserPassword` / the admin API.
+- Email is not used by the app, so there is no password-reset or email
+  verification flow. To change the password, re-run the flow via
+  `authClient.admin.setUserPassword` / the admin API.
 - Keep your credentials out of git — never commit `.env`.

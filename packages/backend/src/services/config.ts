@@ -10,7 +10,6 @@ const valueSchema = z.string().min(1, "value must be a non-empty string");
 
 function envFallback(key: ConfigKey): string | undefined {
   if (key === "OPENROUTER_MODEL") return env.OPENROUTER_MODEL;
-  if (key === "EMAIL_FROM") return env.EMAIL_FROM;
   return undefined;
 }
 
@@ -46,7 +45,6 @@ export async function setConfig(key: ConfigKey, rawValue: unknown) {
 export async function seedDefaults(): Promise<void> {
   const defaults: Record<ConfigKey, string> = {
     OPENROUTER_MODEL: env.OPENROUTER_MODEL,
-    EMAIL_FROM: env.EMAIL_FROM,
   };
   for (const key of CONFIG_KEYS) {
     await AppConfig.updateOne(
