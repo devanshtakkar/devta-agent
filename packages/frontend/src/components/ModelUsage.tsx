@@ -43,8 +43,9 @@ export function ModelUsage() {
   });
 
   const usage: TokenUsage | null | undefined = detailQuery.data?.usage;
-  const model = modelQuery.data?.model ?? usage?.model;
-  const contextLength = modelQuery.data?.contextLength ?? usage?.contextLength;
+  // Prefer the session's last-used model (sessions can switch models mid-chat).
+  const model = usage?.model || modelQuery.data?.model;
+  const contextLength = usage?.contextLength || modelQuery.data?.contextLength;
   const used = usage?.inputTokens ?? 0;
   const percent = contextLength
     ? Math.min(100, Math.round((used / contextLength) * 100))

@@ -1,9 +1,41 @@
 import { env } from "../env.js";
-import { getConfig } from "./config.js";
+import { getConfig, setConfig } from "./config.js";
 
 const MODELS_URL = "https://openrouter.ai/api/v1/models";
 const DEFAULT_CONTEXT_LENGTH = 128_000;
 const CACHE_TTL_MS = 60 * 60 * 1000;
+
+/** Most models a user can keep in the picker. */
+export const MAX_AVAILABLE_MODELS = 50;
+const MAX_MODEL_ID_LENGTH = 160;
+
+/**
+ * OpenRouter model ids look like `vendor/model` and may carry a `~` prefix or
+ * routing suffixes (`:free`, `:nitro`, ...). Keep the check loose: no
+ * whitespace, a vendor segment, and a sane length.
+ */
+export function isValidModelId(value: string): boolean {
+  const id = value.trim();
+  return (
+    id.length > 0 &&
+    id.length <= MAX_MODEL_ID_LENGTH &&
+    !/\s/.test(id) &&
+    /^~?[^\s/]+\/[^\s]+$/.test(id)
+  );
+}
+
+/** Trim, drop invalid ids and remove duplicates while keeping order. */
+export function normalizeModelIds(values: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of values) {
+    const id = raw.trim();
+    if (!isValidModelId(id) || seen.has(id)) continue;
+    seen.add(id);
+    out.push(id);
+  }
+  return out;
+}
 
 interface OpenRouterModel {
   id?: string;
@@ -72,4 +104,42 @@ export async function getCurrentModelInfo(): Promise<{
   const model = await resolveModel();
   const contextLength = await getContextLength(model);
   return { model, contextLength };
+}
+
+/** The model ids offered in the in-chat picker. */
+export async function getAvailableModels(): Promise<string[]> {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(await getConfig("OPENROUTER_MODELS"));
+  } catch {
+    parsed = undefined;
+  }
+  const models = normalizeModelIds(
+    Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === "string") : [],
+  );
+  return models.length > 0 ? models : [env.OPENROUTER_MODEL];
+}
+
+export async function setAvailableModels(models: string[]): Promise<string[]> {
+  const normalized = normalizeModelIds(models);
+  if (normalized.length === 0) {
+    throw new Error("At least one valid model id is required");
+  }
+  await setConfig("OPENROUTER_MODELS", JSON.stringify(normalized));
+  return normalized;
+}
+
+/** Available models plus the default used for new chats. */
+export async function getModelSettings(): Promise<{
+  models: string[];
+  defaultModel: string;
+}> {
+  const [models, defaultModel] = await Promise.all([
+    getAvailableModels(),
+    resolveModel(),
+  ]);
+  return {
+    models: models.includes(defaultModel) ? models : [defaultModel, ...models],
+    defaultModel,
+  };
 }

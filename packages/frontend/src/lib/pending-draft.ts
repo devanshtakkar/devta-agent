@@ -2,6 +2,8 @@ export interface PendingDraft {
   text: string;
   imageDataUrl?: string;
   intent?: "approaches" | "capture";
+  /** Model picked for the first message of the new chat. */
+  model?: string;
 }
 
 /**
