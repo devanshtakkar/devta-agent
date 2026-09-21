@@ -79,7 +79,6 @@ function RootShell() {
           </Button>
           <span className="flex items-baseline gap-1.5">
             <span className="font-logo text-xl leading-none">devta</span>
-            <span className="text-muted-foreground text-[13px]">· wingman</span>
           </span>
         </span>
         <div className="flex items-center gap-2">
