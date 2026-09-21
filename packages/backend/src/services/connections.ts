@@ -140,3 +140,14 @@ export async function appendEvent(
   await conn.save();
   return conn;
 }
+
+/** Remove a single event from a connection's timeline. */
+export async function deleteEvent(userId: string, uuid: string, eventId: string) {
+  const conn = await Connection.findOne({ uuid, userId });
+  if (!conn) return null;
+  const index = conn.events.findIndex((e: { id: string }) => e.id === eventId);
+  if (index === -1) return conn;
+  conn.events.splice(index, 1);
+  await conn.save();
+  return conn;
+}

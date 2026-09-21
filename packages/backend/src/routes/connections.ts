@@ -8,7 +8,7 @@ import {
   type ConnectionEventType,
   type ConnectionStage,
 } from "../models/Connection.js";
-import { appendEvent, saveConnection } from "../services/connections.js";
+import { appendEvent, deleteEvent, saveConnection } from "../services/connections.js";
 
 const router: Router = Router();
 
@@ -198,6 +198,22 @@ router.post("/:uuid/events", requireAuth, async (req: Request, res: Response) =>
   if (!doc) return res.status(404).json({ error: "Connection not found" });
   return res.status(201).json(toDTO(doc.toObject() as LeanConnection));
 });
+
+router.delete(
+  "/:uuid/events/:eventId",
+  requireAuth,
+  async (req: Request, res: Response) => {
+    const parsed = z
+      .object({ uuid: z.string().uuid("invalid connection id"), eventId: z.string().min(1) })
+      .safeParse(req.params);
+    if (!parsed.success) {
+      return res.status(400).json({ error: "Invalid request" });
+    }
+    const doc = await deleteEvent(getUserId(req), parsed.data.uuid, parsed.data.eventId);
+    if (!doc) return res.status(404).json({ error: "Connection not found" });
+    return res.json(toDTO(doc.toObject() as LeanConnection));
+  },
+);
 
 router.delete("/:uuid", requireAuth, async (req: Request, res: Response) => {
   const parsed = uuidParamSchema.safeParse(req.params);

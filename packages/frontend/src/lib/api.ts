@@ -293,6 +293,12 @@ export function deleteConnection(uuid: string) {
   return apiFetch<void>(`/api/connections/${uuid}`, { method: "DELETE" });
 }
 
+export function deleteConnectionEvent(uuid: string, eventId: string) {
+  return apiFetch<Connection>(`/api/connections/${uuid}/events/${eventId}`, {
+    method: "DELETE",
+  });
+}
+
 /** Downscale an image file to a compact JPEG data URL for AI context. */
 export function fileToDataUrl(file: File, maxDim = 1024, quality = 0.72): Promise<string> {
   return new Promise((resolve, reject) => {

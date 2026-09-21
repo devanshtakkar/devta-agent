@@ -1,16 +1,32 @@
+import { useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { ArrowLeftIcon, MapPinIcon } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ArrowLeftIcon, MapPinIcon, MessagesSquareIcon, Trash2Icon } from "lucide-react";
 import { queryClient } from "@/lib/query-client";
 import {
   connectionsKeys,
+  deleteConnectionEvent,
   getConnection,
   STAGE_LABELS,
   type Connection,
+  type ConnectionEvent,
 } from "@/lib/api";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Card,
+  CardAction,
   CardContent,
   CardDescription,
   CardHeader,
@@ -40,21 +56,114 @@ function formatDate(iso: string) {
   });
 }
 
+function TimelineEvent({
+  connectionId,
+  event,
+}: {
+  connectionId: string;
+  event: ConnectionEvent;
+}) {
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+
+  const deleteMutation = useMutation({
+    mutationFn: () => deleteConnectionEvent(connectionId, event.id),
+    onSuccess: (updated) => {
+      queryClient.setQueryData(connectionsKeys.detail(connectionId), updated);
+      void queryClient.invalidateQueries({ queryKey: connectionsKeys.all });
+      setOpen(false);
+    },
+  });
+
+  return (
+    <Card size="sm">
+      <CardHeader>
+        <CardDescription>{formatDate(event.occurredAt)}</CardDescription>
+        <CardTitle>{event.title}</CardTitle>
+        <CardAction>
+          <AlertDialog open={open} onOpenChange={setOpen}>
+            <AlertDialogTrigger
+              render={
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  aria-label={`Delete event: ${event.title}`}
+                />
+              }
+            >
+              <Trash2Icon />
+            </AlertDialogTrigger>
+            <AlertDialogContent size="sm">
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete this event?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  “{event.title}” will be removed from the timeline. This can't be
+                  undone.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  variant="destructive"
+                  disabled={deleteMutation.isPending}
+                  onClick={() => deleteMutation.mutate()}
+                >
+                  Delete
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </CardAction>
+      </CardHeader>
+      {event.details && (
+        <CardContent>
+          <p className="text-muted-foreground text-sm leading-snug">{event.details}</p>
+        </CardContent>
+      )}
+    </Card>
+  );
+}
+
 function ConnectionView() {
-  const connection = Route.useLoaderData();
+  const { connectionId } = Route.useParams();
+  const initial = Route.useLoaderData();
   const navigate = useNavigate();
+
+  const { data: connection } = useQuery({
+    queryKey: connectionsKeys.detail(connectionId),
+    queryFn: () => getConnection(connectionId),
+    initialData: initial,
+    staleTime: 10_000,
+  });
+
+  const chatSessionId = connection.originSessionId;
 
   return (
     <div className="mx-auto flex h-full min-h-0 w-full max-w-md flex-1 flex-col overflow-y-auto px-4 py-4">
-      <Button
-        size="sm"
-        variant="ghost"
-        className="mb-2 -ml-2 self-start"
-        onClick={() => void navigate({ to: "/connections" })}
-      >
-        <ArrowLeftIcon data-icon="inline-start" />
-        Connections
-      </Button>
+      <div className="mb-2 flex items-start justify-between gap-2">
+        <Button
+          size="sm"
+          variant="ghost"
+          className="-ml-2"
+          onClick={() => void navigate({ to: "/connections" })}
+        >
+          <ArrowLeftIcon data-icon="inline-start" />
+          Connections
+        </Button>
+        {chatSessionId && (
+          <Button
+            size="sm"
+            variant="outline"
+            nativeButton={false}
+            render={
+              <Link to="/s/$sessionId" params={{ sessionId: chatSessionId }} />
+            }
+          >
+            <MessagesSquareIcon data-icon="inline-start" />
+            Open chat
+          </Button>
+        )}
+      </div>
 
       <div className="mb-1 flex items-center gap-2">
         <Badge variant={stageVariant(connection.stage)}>
@@ -89,25 +198,12 @@ function ConnectionView() {
       ) : (
         <div className="flex flex-col gap-2.5 pb-4">
           {[...connection.events].reverse().map((e) => (
-            <Card key={e.id} size="sm">
-              <CardHeader>
-                <CardDescription>{formatDate(e.occurredAt)}</CardDescription>
-                <CardTitle>{e.title}</CardTitle>
-              </CardHeader>
-              {e.details && (
-                <CardContent>
-                  <p className="text-muted-foreground text-sm leading-snug">
-                    {e.details}
-                  </p>
-                </CardContent>
-              )}
-            </Card>
+            <TimelineEvent key={e.id} connectionId={connection.uuid} event={e} />
           ))}
         </div>
       )}
 
       <p className="text-muted-foreground mt-2 pb-4 text-xs">
-        Started from a chat.{" "}
         <Link className="underline" to="/connections">
           View all connections
         </Link>
