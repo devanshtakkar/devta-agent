@@ -363,31 +363,70 @@ export function deleteConnectionEvent(uuid: string, eventId: string) {
   });
 }
 
-/** Downscale an image file to a compact JPEG data URL for AI context. */
-export function fileToDataUrl(file: File, maxDim = 1024, quality = 0.72): Promise<string> {
+/** Target ceiling for an attached image's decoded size (1 MB). */
+export const MAX_IMAGE_BYTES = 1_000_000;
+
+/** Byte size of a data URL's base64 payload. */
+export function dataUrlBytes(dataUrl: string): number {
+  const comma = dataUrl.indexOf(",");
+  const base64 = comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl;
+  const padding = base64.endsWith("==") ? 2 : base64.endsWith("=") ? 1 : 0;
+  return Math.max(0, Math.floor((base64.length * 3) / 4) - padding);
+}
+
+/**
+ * Downscale and re-encode an image (screenshot or photo) to a data URL no
+ * larger than `maxBytes` (default 1 MB), so it stays cheap to store and send.
+ */
+export function fileToDataUrl(
+  file: File,
+  opts: { maxBytes?: number; maxDim?: number } = {},
+): Promise<string> {
+  const maxBytes = opts.maxBytes ?? MAX_IMAGE_BYTES;
   return new Promise((resolve, reject) => {
     const img = new Image();
-    const url = URL.createObjectURL(file);
+    const objectUrl = URL.createObjectURL(file);
     img.onload = () => {
-      URL.revokeObjectURL(url);
-      const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
-      const w = Math.max(1, Math.round(img.width * scale));
-      const h = Math.max(1, Math.round(img.height * scale));
+      URL.revokeObjectURL(objectUrl);
       const canvas = document.createElement("canvas");
-      canvas.width = w;
-      canvas.height = h;
       const ctx = canvas.getContext("2d");
       if (!ctx) {
         reject(new Error("Canvas not supported"));
         return;
       }
-      ctx.drawImage(img, 0, 0, w, h);
-      resolve(canvas.toDataURL("image/jpeg", quality));
+
+      // WebP compresses screenshots (and keeps text crisp) better than JPEG;
+      // fall back to JPEG where the browser can't encode WebP.
+      const encode = (w: number, h: number, quality: number) => {
+        canvas.width = w;
+        canvas.height = h;
+        ctx.clearRect(0, 0, w, h);
+        ctx.drawImage(img, 0, 0, w, h);
+        const webp = canvas.toDataURL("image/webp", quality);
+        if (webp.startsWith("data:image/webp")) return webp;
+        return canvas.toDataURL("image/jpeg", quality);
+      };
+
+      let maxDim = opts.maxDim ?? 1600;
+      for (let attempt = 0; attempt < 6; attempt++) {
+        const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+        const w = Math.max(1, Math.round(img.width * scale));
+        const h = Math.max(1, Math.round(img.height * scale));
+        for (const quality of [0.8, 0.68, 0.55, 0.42, 0.32]) {
+          const dataUrl = encode(w, h, quality);
+          if (dataUrlBytes(dataUrl) <= maxBytes) {
+            resolve(dataUrl);
+            return;
+          }
+        }
+        maxDim = Math.round(maxDim * 0.72);
+      }
+      reject(new Error("Image is too large to attach"));
     };
     img.onerror = () => {
-      URL.revokeObjectURL(url);
+      URL.revokeObjectURL(objectUrl);
       reject(new Error("Could not read image"));
     };
-    img.src = url;
+    img.src = objectUrl;
   });
 }

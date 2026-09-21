@@ -81,7 +81,9 @@ const CAPTURE_PROMPT =
   "Save what we discussed as a connection I can track. Summarize who she is, what happened and where it stands, then show me the draft to review.";
 
 function imagePart(dataUrl: string): FileUIPart {
-  return { type: "file", mediaType: "image/jpeg", url: dataUrl, filename: "scene.jpg" };
+  const mediaType = /^data:([^;,]+)/.exec(dataUrl)?.[1] ?? "image/jpeg";
+  const ext = mediaType.split("/")[1] ?? "jpg";
+  return { type: "file", mediaType, url: dataUrl, filename: `image.${ext}` };
 }
 
 function stageVariant(stage: ConnectionStage) {
@@ -109,7 +111,7 @@ function UserParts({ message }: { message: ChatMessage }) {
                 <img src={(part as FileUIPart).url} alt="scene context" />
               </AttachmentMedia>
               <AttachmentContent>
-                <AttachmentTitle>Scene photo</AttachmentTitle>
+                <AttachmentTitle>Screenshot</AttachmentTitle>
               </AttachmentContent>
             </Attachment>
           );
@@ -180,6 +182,7 @@ export function CoachChat({ sessionId }: { sessionId: string | null }) {
   const queryClient = useQueryClient();
   const [situation, setSituation] = useState("");
   const [imageDataUrl, setImageDataUrl] = useState<string | undefined>();
+  const [imageError, setImageError] = useState<string | undefined>();
   const [approachActive, setApproachActive] = useState(false);
   const [stopped, setStopped] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -265,8 +268,10 @@ export function CoachChat({ sessionId }: { sessionId: string | null }) {
     if (!file) return;
     try {
       setImageDataUrl(await fileToDataUrl(file));
+      setImageError(undefined);
     } catch {
-      // ignore — text-only fallback
+      setImageDataUrl(undefined);
+      setImageError("Couldn't attach that image. Try a smaller one.");
     }
   }
 
@@ -284,6 +289,7 @@ export function CoachChat({ sessionId }: { sessionId: string | null }) {
       setPendingDraft(draft);
       setSituation("");
       setImageDataUrl(undefined);
+      setImageError(undefined);
       setApproachActive(false);
       void navigate({
         to: "/s/$sessionId",
@@ -321,6 +327,7 @@ export function CoachChat({ sessionId }: { sessionId: string | null }) {
     const messageText = text || APPROACH_PROMPT;
     setSituation("");
     setImageDataUrl(undefined);
+    setImageError(undefined);
     setApproachActive(false);
     void sendMessage(
       files && files.length > 0 ? { text: messageText, files } : { text: messageText },
@@ -407,9 +414,9 @@ export function CoachChat({ sessionId }: { sessionId: string | null }) {
                     </EmptyMedia>
                     <EmptyTitle>Your wingman is here</EmptyTitle>
                     <EmptyDescription>
-                      Tell me the scene or ask anything about the moment. Tap + for
-                      ready-to-use approach options, or to save an approach and track
-                      her.
+                      Tell me the scene or ask anything about the moment. Attach a
+                      screenshot of your chat to get help with the next text, or tap +
+                      for ready-to-use approach options.
                     </EmptyDescription>
                   </EmptyHeader>
                 </Empty>
@@ -516,21 +523,29 @@ export function CoachChat({ sessionId }: { sessionId: string | null }) {
                 <img src={imageDataUrl} alt="context" />
               </AttachmentMedia>
               <AttachmentContent>
-                <AttachmentTitle>Scene photo</AttachmentTitle>
+                <AttachmentTitle>Screenshot</AttachmentTitle>
                 <AttachmentDescription>Attached to your next message</AttachmentDescription>
               </AttachmentContent>
-              <AttachmentAction aria-label="Remove image" onClick={() => setImageDataUrl(undefined)}>
+              <AttachmentAction
+                aria-label="Remove image"
+                onClick={() => setImageDataUrl(undefined)}
+              >
                 <XIcon />
               </AttachmentAction>
             </Attachment>
+          )}
+          {imageError && (
+            <p className="text-destructive mb-2 text-xs">{imageError}</p>
           )}
           <input
             ref={fileRef}
             type="file"
             accept="image/*"
-            capture="environment"
             className="hidden"
-            onChange={(e) => void onPickImage(e.target.files?.[0])}
+            onChange={(e) => {
+              void onPickImage(e.target.files?.[0]);
+              e.target.value = "";
+            }}
           />
           {approachActive && (
             <div className="border-primary/30 bg-primary/5 text-primary mb-2 flex items-center gap-2 rounded-xl border px-3 py-2 text-sm">

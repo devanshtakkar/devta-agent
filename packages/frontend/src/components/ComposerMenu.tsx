@@ -87,7 +87,12 @@ export function ComposerMenu({
               )}
             >
               <ImagePlusIcon className="size-4" />
-              Add image
+              <span className="flex flex-1 flex-col">
+                Add image
+                <span className="text-muted-foreground text-xs">
+                  Screenshot of your chat or a photo
+                </span>
+              </span>
             </Menu.Item>
           </Menu.Popup>
         </Menu.Positioner>
