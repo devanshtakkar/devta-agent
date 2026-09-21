@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { Outlet, createRootRoute } from "@tanstack/react-router";
-import { LogOut, MenuIcon } from "lucide-react";
+import { Link, Outlet, createRootRoute } from "@tanstack/react-router";
+import { HeartIcon, LogOut, MenuIcon } from "lucide-react";
 import { authClient, useSession } from "@/lib/auth-client";
 import { AuthForm } from "@/components/AuthForm";
 import { SessionDrawer } from "@/components/SessionDrawer";
@@ -83,6 +83,15 @@ function RootShell() {
           </span>
         </span>
         <div className="flex items-center gap-2">
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            aria-label="Connections"
+            nativeButton={false}
+            render={<Link to="/connections" />}
+          >
+            <HeartIcon />
+          </Button>
           <ModelUsage />
           <ThemeToggle />
           <AlertDialog>

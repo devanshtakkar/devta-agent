@@ -1,15 +1,23 @@
 import { Menu } from "@base-ui/react/menu";
-import { CheckIcon, ImagePlusIcon, Plus, SparklesIcon } from "lucide-react";
+import {
+  CheckIcon,
+  ImagePlusIcon,
+  Plus,
+  SparklesIcon,
+  UserPlusIcon,
+} from "lucide-react";
 import { cn } from "cn";
 
 export function ComposerMenu({
   onAddImage,
   onApproaches,
+  onSaveApproach,
   disabled,
   approachActive,
 }: {
   onAddImage: () => void;
   onApproaches: () => void;
+  onSaveApproach: () => void;
   disabled?: boolean;
   approachActive?: boolean;
 }) {
@@ -53,6 +61,22 @@ export function ComposerMenu({
                 </span>
               </span>
               {approachActive && <CheckIcon className="size-4" />}
+            </Menu.Item>
+            <Menu.Item
+              onClick={onSaveApproach}
+              className={cn(
+                "flex cursor-default items-center gap-2.5 rounded-xl px-3 py-2 text-sm outline-none select-none",
+                "data-highlighted:bg-accent data-highlighted:text-accent-foreground",
+                "data-disabled:pointer-events-none data-disabled:opacity-50",
+              )}
+            >
+              <UserPlusIcon className="size-4" />
+              <span className="flex flex-1 flex-col">
+                Save approach
+                <span className="text-muted-foreground text-xs">
+                  Track her and how it went
+                </span>
+              </span>
             </Menu.Item>
             <Menu.Item
               onClick={onAddImage}

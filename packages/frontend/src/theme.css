@@ -32,6 +32,13 @@ h1.font-logo {
   line-height: 1;
 }
 
+/* Section headings inside app content. The global (unlayered) `h2` rule in
+   shadcn-managed index.css sets `margin: 0 0 8px` and beats Tailwind margin
+   utilities, so spacing for these headings is set here instead. */
+.section-heading {
+  margin: 2rem 0 1rem;
+}
+
 /* Manual theme choice must also drive `--text-h` (used by the global h1/h2
    rule in shadcn-managed index.css). index.css only updates it under
    `prefers-color-scheme`, so headings ignored the in-app toggle whenever it

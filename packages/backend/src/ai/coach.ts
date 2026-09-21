@@ -1,5 +1,6 @@
 import { tool } from "ai";
 import { z } from "zod";
+import { CONNECTION_STAGES } from "../models/Connection.js";
 
 export const SYSTEM_PROMPT = `You are Devta, a respectful, consent-first dating wingman whose end goal is to help the user build genuine, consensual relationships that can grow into something serious and, eventually, marriage.
 
@@ -70,7 +71,66 @@ export const proposeBranches = tool({
   execute: async (input) => input,
 });
 
-export const chatTools = { proposeApproaches, proposeBranches };
+/**
+ * Draft a tracked connection from the current conversation. This only proposes
+ * a structured summary — nothing is saved until the user reviews and confirms
+ * it in the app. Use it when the user reports meeting someone or tells you how
+ * an approach or interaction went, or when the user asks to save an approach.
+ */
+const connectionDraftSchema = z.object({
+  name: z
+    .string()
+    .describe("The person's name or a short nickname. Required — ask if unknown."),
+  stage: z
+    .enum(CONNECTION_STAGES)
+    .describe(
+      "Your read of where this stands now: approached, talking, contact, dating, intimate, relationship, engaged, married, failed or ghosted.",
+    ),
+  summary: z
+    .string()
+    .describe("1-2 sentence summary of the situation and where it stands."),
+  whatHappened: z
+    .string()
+    .describe(
+      "Close summary of the interaction so far: what the user said, how she responded, and how it went.",
+    ),
+  metLocation: z.string().optional().describe("Where they met, if known."),
+  metAt: z
+    .string()
+    .optional()
+    .describe("When they met, as an ISO date/time if known."),
+  approachOpener: z
+    .string()
+    .optional()
+    .describe("The exact opener / first line the user used, if known."),
+  nextMove: z
+    .string()
+    .optional()
+    .describe("Your suggested next move to advance the connection."),
+  contact: z
+    .object({
+      type: z.enum(["number", "social", "none"]),
+      value: z.string().optional(),
+    })
+    .optional()
+    .describe("Whether contact details were exchanged."),
+  targetConnectionId: z
+    .string()
+    .optional()
+    .describe(
+      "Set only when logging onto an EXISTING connection the user already told you about; include its uuid. Leave empty to propose a brand-new connection.",
+    ),
+});
+
+export const proposeConnection = tool({
+  description:
+    "Propose (do not save) a tracked connection summarizing who the user met and how it went. Use when the user reports meeting someone, describes how an approach or interaction went, or asks to save/log an approach. Nothing is persisted until the user confirms.",
+  inputSchema: connectionDraftSchema,
+  execute: async (input) => input,
+});
+
+export const chatTools = { proposeApproaches, proposeBranches, proposeConnection };
 
 export type StarterOutput = z.infer<typeof starterSchema>;
 export type BranchesOutput = z.infer<typeof branchesSchema>;
+export type ConnectionDraftOutput = z.infer<typeof connectionDraftSchema>;
