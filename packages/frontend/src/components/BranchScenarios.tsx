@@ -8,6 +8,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Carousel, CarouselContent, CarouselItem } from "@/components/ui/carousel";
 import { Skeleton } from "@/components/ui/skeleton";
 
 function Loading() {
@@ -18,8 +19,10 @@ function Loading() {
       aria-label="Brainstorming branch scenarios"
     >
       <Skeleton className="h-4 w-1/2" />
-      <Skeleton className="h-28 w-full rounded-2xl" />
-      <Skeleton className="h-28 w-full rounded-2xl" />
+      <div className="flex gap-3">
+        <Skeleton className="h-40 w-[82%] shrink-0 rounded-2xl" />
+        <Skeleton className="h-40 w-[82%] shrink-0 rounded-2xl" />
+      </div>
     </div>
   );
 }
@@ -51,28 +54,32 @@ export function BranchScenarios({ part }: { part: BranchToolPart }) {
         <GitBranchIcon className="size-4 shrink-0" />
         How this could branch out
       </p>
-      <div className="flex flex-col gap-3">
-        {branches.map((b, i) => (
-          <Card key={b.id}>
-            <CardHeader>
-              <CardDescription>
-                Scenario {i + 1} of {branches.length}
-              </CardDescription>
-              <CardTitle>{b.reaction}</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-3">
-              <p className="text-muted-foreground text-[13px] leading-snug">{b.read}</p>
-              <div className="border-border/60 bg-muted/50 rounded-xl border px-3.5 py-2.5">
-                <p className="text-[15px] leading-snug font-medium">{b.move}</p>
-              </div>
-              <p className="text-[13px] leading-snug">
-                <span className="font-semibold">Leads to: </span>
-                {b.outcome}
-              </p>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      <Carousel className="-mx-4 px-4">
+        <CarouselContent className="-ml-3">
+          {branches.map((b, i) => (
+            <CarouselItem key={b.id} className="max-w-[340px] basis-[82%] py-2 pl-3">
+              <Card className="h-full">
+                <CardHeader>
+                  <CardDescription>
+                    Scenario {i + 1} of {branches.length}
+                  </CardDescription>
+                  <CardTitle>{b.reaction}</CardTitle>
+                </CardHeader>
+                <CardContent className="flex flex-col gap-3">
+                  <p className="text-muted-foreground text-[13px] leading-snug">{b.read}</p>
+                  <div className="border-border/60 bg-muted/50 rounded-xl border px-3.5 py-2.5">
+                    <p className="text-[15px] leading-snug font-medium">{b.move}</p>
+                  </div>
+                  <p className="text-[13px] leading-snug">
+                    <span className="font-semibold">Leads to: </span>
+                    {b.outcome}
+                  </p>
+                </CardContent>
+              </Card>
+            </CarouselItem>
+          ))}
+        </CarouselContent>
+      </Carousel>
     </div>
   );
 }
