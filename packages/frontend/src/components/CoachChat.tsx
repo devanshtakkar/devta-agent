@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { FileUIPart, ReasoningUIPart, TextUIPart } from "ai";
 import { useChat } from "@ai-sdk/react";
+import { cn } from "cn";
 import { useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  RotateCcwIcon,
   SendHorizontalIcon,
   SparklesIcon,
   SquareIcon,
@@ -147,6 +149,7 @@ export function CoachChat({ sessionId }: { sessionId: string | null }) {
   const [situation, setSituation] = useState("");
   const [imageDataUrl, setImageDataUrl] = useState<string | undefined>();
   const [approachActive, setApproachActive] = useState(false);
+  const [stopped, setStopped] = useState(false);
   const [creating, setCreating] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -178,7 +181,8 @@ export function CoachChat({ sessionId }: { sessionId: string | null }) {
     id: sessionId ?? "new",
     messages: initialMessages,
     transport,
-    onFinish: () => {
+    onFinish: ({ isAbort }) => {
+      setStopped(isAbort);
       if (sessionId) {
         void queryClient.invalidateQueries({ queryKey: sessionsKeys.detail(sessionId) });
       }
@@ -207,6 +211,10 @@ export function CoachChat({ sessionId }: { sessionId: string | null }) {
 
   const busy = status === "submitted" || status === "streaming";
   const isFirstMessage = messages.length === 0;
+
+  // Offer a retry on the last turn when the generation failed or the user
+  // stopped it partway (an aborted stream ends in `ready`, not `error`).
+  const canRetry = !busy && (status === "error" || stopped);
 
   async function onPickImage(file: File | undefined) {
     if (!file) return;
@@ -277,6 +285,12 @@ export function CoachChat({ sessionId }: { sessionId: string | null }) {
       if (!active) textareaRef.current?.focus();
       return !active;
     });
+  }
+
+  function retry() {
+    if (busy) return;
+    setStopped(false);
+    void regenerate();
   }
 
   function branchFromStarter(starter: Starter) {
@@ -354,6 +368,25 @@ export function CoachChat({ sessionId }: { sessionId: string | null }) {
                         )}
                       </MessageContent>
                     </Message>
+                    {m.id === last?.id && canRetry && (
+                      <div
+                        className={cn(
+                          "flex px-1",
+                          m.role === "user" ? "justify-end" : "justify-start",
+                        )}
+                      >
+                        <Button
+                          type="button"
+                          size="icon-sm"
+                          variant="ghost"
+                          aria-label="Retry response"
+                          title="Retry"
+                          onClick={retry}
+                        >
+                          <RotateCcwIcon />
+                        </Button>
+                      </div>
+                    )}
                   </MessageGroup>
                 </MessageScrollerItem>
               ))}
@@ -374,19 +407,10 @@ export function CoachChat({ sessionId }: { sessionId: string | null }) {
                 <MessageScrollerItem messageId="error">
                   <Alert variant="destructive">
                     <TriangleAlertIcon />
-                    <AlertDescription className="flex items-center justify-between gap-3">
-                      <span>
-                        {error?.message
-                          ? "The wingman hit a snag. Try again."
-                          : "Something went wrong."}
-                      </span>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => regenerate()}
-                      >
-                        Retry
-                      </Button>
+                    <AlertDescription>
+                      {error?.message
+                        ? "The wingman hit a snag. Retry from your last message."
+                        : "Something went wrong. Retry from your last message."}
                     </AlertDescription>
                   </Alert>
                 </MessageScrollerItem>
