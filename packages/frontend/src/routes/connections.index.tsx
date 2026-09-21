@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
 import { UserPlusIcon } from "lucide-react";
 import { queryClient } from "@/lib/query-client";
 import {
@@ -39,7 +40,17 @@ function stageVariant(stage: Connection["stage"]) {
 }
 
 function ConnectionsView() {
-  const connections = Route.useLoaderData();
+  const initial = Route.useLoaderData();
+  // Subscribe to the query (rather than reading loader data directly) so that
+  // deleting a connection invalidates the list and the UI updates immediately.
+  const { data: connections } = useQuery({
+    queryKey: connectionsKeys.list(),
+    queryFn: () => listConnections(),
+    initialData: initial,
+    // The loader may hand us a cached snapshot; treat it as immediately stale
+    // so a deletion elsewhere always revalidates when this screen mounts.
+    staleTime: 0,
+  });
 
   return (
     <div className="mx-auto flex h-full min-h-0 w-full max-w-md flex-1 flex-col overflow-y-auto px-4 py-4">
