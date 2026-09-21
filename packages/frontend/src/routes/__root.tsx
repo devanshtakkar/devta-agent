@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, Outlet, createRootRoute } from "@tanstack/react-router";
-import { HeartIcon, LogOut, MenuIcon } from "lucide-react";
+import { BookmarkIcon, HeartIcon, LogOut, MenuIcon } from "lucide-react";
 import { authClient, useSession } from "@/lib/auth-client";
+import {
+  clearCachedAuth,
+  setCachedAuth,
+  useCachedAuth,
+} from "@/lib/auth-cache";
 import { AuthForm } from "@/components/AuthForm";
 import { SessionDrawer } from "@/components/SessionDrawer";
 import { SplashScreen } from "@/components/SplashScreen";
@@ -21,7 +26,8 @@ import {
 } from "@/components/ui/alert-dialog";
 
 function RootShell() {
-  const { data: session, isPending } = useSession();
+  const { data: session, isPending, error } = useSession();
+  const cachedAuth = useCachedAuth();
   const [online, setOnline] = useState(navigator.onLine);
   const [splash, setSplash] = useState(true);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -38,7 +44,25 @@ function RootShell() {
     };
   }, []);
 
-  if (isPending) {
+  // Remember that this device signed in so the shell stays reachable offline.
+  // Only a definitive answer from the server (no session, or 401) clears it —
+  // never a network failure.
+  useEffect(() => {
+    if (session) {
+      setCachedAuth(true);
+      return;
+    }
+    if (isPending || !online) return;
+    if (!error || error.status === 401) clearCachedAuth();
+  }, [session, isPending, error, online]);
+
+  const offline = !online;
+  // With a past sign-in on this device, an offline/unreachable session check
+  // shouldn't block the shell; saved approaches live on the device.
+  const allowOffline = cachedAuth && (offline || !!error);
+  const authed = !!session || allowOffline;
+
+  if (isPending && !allowOffline) {
     return (
       <main className="mx-auto flex h-dvh w-full max-w-md items-center justify-center overflow-hidden">
         {splash && <SplashScreen onDone={hideSplash} />}
@@ -47,14 +71,14 @@ function RootShell() {
     );
   }
 
-  if (!session) {
+  if (!authed) {
     return (
       <main className="mx-auto flex h-dvh w-full max-w-md flex-col overflow-hidden">
         {splash && <SplashScreen onDone={hideSplash} />}
         <div className="flex justify-end px-4 pt-3">
           <ThemeToggle />
         </div>
-        {!online && (
+        {offline && (
           <p className="bg-amber-500/15 px-4 py-2 text-center text-xs">
             Offline — sign-in needs internet.
           </p>
@@ -113,7 +137,10 @@ function RootShell() {
                 <AlertDialogCancel>Cancel</AlertDialogCancel>
                 <AlertDialogAction
                   variant="destructive"
-                  onClick={() => void authClient.signOut()}
+                  onClick={() => {
+                    clearCachedAuth();
+                    void authClient.signOut();
+                  }}
                 >
                   Sign out
                 </AlertDialogAction>
@@ -122,10 +149,17 @@ function RootShell() {
           </AlertDialog>
         </div>
       </header>
-      {!online && (
-        <p className="bg-amber-500/15 px-4 py-2 text-center text-xs">
-          Offline — reading cached chats. Reconnect to continue.
-        </p>
+      {offline && (
+        <div className="bg-amber-500/15 flex flex-wrap items-center justify-center gap-x-2 gap-y-0.5 px-4 py-2 text-center text-xs">
+          <span>Offline — saved approaches work, chats need a connection.</span>
+          <Link
+            to="/saved"
+            className="font-medium underline underline-offset-2"
+          >
+            <BookmarkIcon className="mr-1 inline size-3" />
+            Open saved approaches
+          </Link>
+        </div>
       )}
       <SessionDrawer open={drawerOpen} onOpenChange={setDrawerOpen} />
       <Outlet />
