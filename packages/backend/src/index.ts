@@ -15,7 +15,7 @@ const app: Express = express();
 
 app.use(cors({ origin: env.FRONTEND_URL, credentials: true }));
 app.use(morgan("dev"));
-app.use(express.json({ limit: "10mb" }));
+app.use(express.json({ limit: "20mb" }));
 
 app.get("/health", (_req, res) => {
   res.json({ ok: true });

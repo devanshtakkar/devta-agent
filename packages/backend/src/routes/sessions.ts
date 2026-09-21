@@ -46,7 +46,74 @@ const titleSchema = z.object({
 
 const MAX_MESSAGES = 100;
 
+/** Decoded-size ceiling for a single attached image (1 MB), mirrored client-side. */
+const MAX_IMAGE_BYTES = 1_000_000;
+/** Total decoded image bytes kept per session (stays under Mongo's 16 MB doc cap). */
+const MAX_STORED_IMAGE_BYTES = 8_000_000;
+
 type StoredMessage = z.infer<typeof uiMessageSchema>;
+type MessagePart = StoredMessage["parts"][number];
+
+interface FilePartLike {
+  type: string;
+  mediaType?: unknown;
+  url?: unknown;
+}
+
+/** A `file` part carrying an image data URL (base64 payload). */
+function isImagePart(part: { type: string }): boolean {
+  const p = part as FilePartLike;
+  return (
+    p.type === "file" &&
+    typeof p.mediaType === "string" &&
+    p.mediaType.startsWith("image/") &&
+    typeof p.url === "string" &&
+    p.url.startsWith("data:")
+  );
+}
+
+/** Byte size of a data URL's base64 payload (without decoding it). */
+function dataUrlBytes(dataUrl: string): number {
+  const comma = dataUrl.indexOf(",");
+  const base64 = comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl;
+  const padding = base64.endsWith("==") ? 2 : base64.endsWith("=") ? 1 : 0;
+  return Math.max(0, Math.floor((base64.length * 3) / 4) - padding);
+}
+
+function imageBytes(part: { type: string }): number {
+  const url = (part as FilePartLike).url;
+  return typeof url === "string" ? dataUrlBytes(url) : 0;
+}
+
+/**
+ * Keep the newest image parts within a per-session byte budget, dropping the
+ * oldest images so a long chat can never overflow the Mongo document limit.
+ */
+function capStoredImages(messages: StoredMessage[]): StoredMessage[] {
+  let budget = MAX_STORED_IMAGE_BYTES;
+  const out = [...messages];
+  for (let i = out.length - 1; i >= 0; i--) {
+    const message = out[i];
+    const parts = message.parts ?? [];
+    let dropped = false;
+    const kept: MessagePart[] = [];
+    for (const part of parts) {
+      if (!isImagePart(part)) {
+        kept.push(part);
+        continue;
+      }
+      const bytes = imageBytes(part);
+      if (bytes <= budget) {
+        budget -= bytes;
+        kept.push(part);
+      } else {
+        dropped = true;
+      }
+    }
+    if (dropped) out[i] = { ...message, parts: kept };
+  }
+  return out;
+}
 
 interface TokenUsage {
   model?: string;
@@ -85,14 +152,19 @@ function messageText(message: Pick<StoredMessage, "parts">): string {
     .trim();
 }
 
-/** Persist without ephemeral parts (images are context-only; reasoning is transient). */
+/**
+ * Persist the turn. Image parts are kept as base64 data URLs so screenshots
+ * survive reloads; reasoning is transient and oversized/other files are dropped.
+ */
 function toStoredMessage(message: UIMessage): StoredMessage {
   return {
     id: message.id,
     role: message.role,
-    parts: (message.parts ?? []).filter(
-      (p) => p.type !== "file" && p.type !== "reasoning",
-    ),
+    parts: (message.parts ?? []).filter((p) => {
+      if (p.type === "reasoning") return false;
+      if (p.type === "file") return isImagePart(p) && imageBytes(p) <= MAX_IMAGE_BYTES;
+      return true;
+    }),
     metadata: message.metadata,
   };
 }
@@ -101,12 +173,27 @@ function toStoredMessage(message: UIMessage): StoredMessage {
  * Reasoning is turn-local, so drop it before the model call. Doing so can
  * leave a tool-only assistant turn empty (tool parts with no result are also
  * dropped during conversion), which providers reject — so drop those too.
+ *
+ * Only the most recent screenshot is sent as image context; older images stay
+ * stored for history but are stripped from the model prompt to bound tokens.
  */
 function forModel(messages: UIMessage[]): UIMessage[] {
+  let lastImageIndex = -1;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if ((messages[i].parts ?? []).some(isImagePart)) {
+      lastImageIndex = i;
+      break;
+    }
+  }
+
   const out: UIMessage[] = [];
-  for (const message of messages) {
+  for (let i = 0; i < messages.length; i++) {
+    const message = messages[i];
     if (message.role !== "assistant") {
-      out.push(message);
+      const parts = (message.parts ?? []).filter(
+        (p) => p.type !== "file" || (i === lastImageIndex && isImagePart(p)),
+      );
+      if (parts.length > 0) out.push({ ...message, parts });
       continue;
     }
     const parts = (message.parts ?? []).filter((p) => p.type !== "reasoning");
@@ -344,6 +431,15 @@ router.post("/:uuid/chat", requireAuth, async (req: Request, res: Response) => {
   const intent = parsedBody.data.intent;
   const isFirstUserMessage = (session.messages?.length ?? 0) === 0;
 
+  const oversizedImage = incoming.some((m) =>
+    (m.parts ?? []).some((p) => isImagePart(p) && imageBytes(p) > MAX_IMAGE_BYTES),
+  );
+  if (oversizedImage) {
+    return res
+      .status(413)
+      .json({ error: "Image is too large. Screenshots must be under 1 MB." });
+  }
+
   try {
     const openrouter = createOpenRouter({ apiKey: env.OPENROUTER_API_KEY });
     const modelId = await resolveModel();
@@ -368,7 +464,7 @@ router.post("/:uuid/chat", requireAuth, async (req: Request, res: Response) => {
       sendReasoning: true,
       onFinish: async ({ messages }) => {
         try {
-          const stored = messages.map(toStoredMessage);
+          const stored = capStoredImages(messages.map(toStoredMessage));
           await ChatSession.updateOne(
             { _id: session._id },
             { $set: { messages: stored } },
