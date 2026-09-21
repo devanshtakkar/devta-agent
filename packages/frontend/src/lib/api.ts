@@ -227,6 +227,18 @@ export const modelsKeys = {
   current: ["models", "current"] as const,
 };
 
+export class ApiError extends Error {
+  status: number;
+  body: unknown;
+
+  constructor(status: number, body: unknown, message: string) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.body = body;
+  }
+}
+
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, {
     credentials: "include",
@@ -235,7 +247,13 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
-    throw new Error(text || `Request failed: ${res.status}`);
+    let body: unknown = text;
+    try {
+      body = text ? JSON.parse(text) : undefined;
+    } catch {
+      // Non-JSON error body; keep the raw text.
+    }
+    throw new ApiError(res.status, body, text || `Request failed: ${res.status}`);
   }
   if (res.status === 204) return undefined as T;
   return (await res.json()) as T;
@@ -272,8 +290,31 @@ export function renameSession(uuid: string, title: string) {
   });
 }
 
-export function deleteSession(uuid: string) {
-  return apiFetch<void>(`/api/sessions/${uuid}`, { method: "DELETE" });
+export interface ActiveConnectionInfo {
+  uuid: string;
+  name: string;
+  stage: ConnectionStage;
+}
+
+/**
+ * When a session delete is rejected because the chat is linked to a connection,
+ * the API returns 409 with the blocking connection. Pull it out of the error.
+ */
+export function activeConnectionFromError(err: unknown): ActiveConnectionInfo | null {
+  if (!(err instanceof ApiError) || err.status !== 409) return null;
+  const body = err.body as { connection?: Partial<ActiveConnectionInfo> } | null;
+  const connection = body?.connection;
+  if (!connection?.uuid || !connection.name || !connection.stage) return null;
+  return {
+    uuid: connection.uuid,
+    name: connection.name,
+    stage: connection.stage,
+  };
+}
+
+export function deleteSession(uuid: string, opts?: { confirm?: string }) {
+  const query = opts?.confirm ? `?confirm=${encodeURIComponent(opts.confirm)}` : "";
+  return apiFetch<void>(`/api/sessions/${uuid}${query}`, { method: "DELETE" });
 }
 
 export function listConnections(sessionId?: string) {
