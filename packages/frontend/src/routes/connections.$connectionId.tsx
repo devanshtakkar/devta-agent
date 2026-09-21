@@ -5,6 +5,7 @@ import { ArrowLeftIcon, MapPinIcon, MessagesSquareIcon, Trash2Icon } from "lucid
 import { queryClient } from "@/lib/query-client";
 import {
   connectionsKeys,
+  deleteConnection,
   deleteConnectionEvent,
   getConnection,
   STAGE_LABELS,
@@ -24,6 +25,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Card,
   CardAction,
@@ -124,6 +126,76 @@ function TimelineEvent({
   );
 }
 
+function DeleteConnectionButton({
+  connectionId,
+  connectionName,
+}: {
+  connectionId: string;
+  connectionName: string;
+}) {
+  const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
+  const [confirmText, setConfirmText] = useState("");
+
+  const deleteMutation = useMutation({
+    mutationFn: () => deleteConnection(connectionId, { confirm: "CONFIRM" }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: connectionsKeys.all });
+      queryClient.removeQueries({ queryKey: connectionsKeys.detail(connectionId) });
+      setOpen(false);
+      setConfirmText("");
+      void navigate({ to: "/connections" });
+    },
+  });
+
+  return (
+    <AlertDialog
+      open={open}
+      onOpenChange={(o) => {
+        setOpen(o);
+        if (!o) setConfirmText("");
+      }}
+    >
+      <AlertDialogTrigger
+        render={<Button size="sm" variant="outline" className="text-destructive" />}
+      >
+        <Trash2Icon data-icon="inline-start" />
+        Delete connection
+      </AlertDialogTrigger>
+      <AlertDialogContent size="sm">
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete this connection?</AlertDialogTitle>
+          <AlertDialogDescription>
+            “{connectionName}” and its timeline will be removed. This can&apos;t be
+            undone. The chat it came from is kept. Type{" "}
+            <span className="font-medium">CONFIRM</span> to delete.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <Input
+          value={confirmText}
+          onChange={(e) => setConfirmText(e.target.value)}
+          placeholder="CONFIRM"
+          aria-label="Type CONFIRM to delete this connection"
+          autoCapitalize="characters"
+          autoCorrect="off"
+          spellCheck={false}
+        />
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            variant="destructive"
+            disabled={confirmText !== "CONFIRM" || deleteMutation.isPending}
+            onClick={() => deleteMutation.mutate()}
+          >
+            Delete connection
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
 function ConnectionView() {
   const { connectionId } = Route.useParams();
   const initial = Route.useLoaderData();
@@ -208,6 +280,13 @@ function ConnectionView() {
           View all connections
         </Link>
       </p>
+
+      <div className="border-border/60 border-t pt-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+        <DeleteConnectionButton
+          connectionId={connection.uuid}
+          connectionName={connection.name}
+        />
+      </div>
     </div>
   );
 }

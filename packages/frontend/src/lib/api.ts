@@ -352,8 +352,9 @@ export function updateConnection(
   });
 }
 
-export function deleteConnection(uuid: string) {
-  return apiFetch<void>(`/api/connections/${uuid}`, { method: "DELETE" });
+export function deleteConnection(uuid: string, opts?: { confirm?: string }) {
+  const query = opts?.confirm ? `?confirm=${encodeURIComponent(opts.confirm)}` : "";
+  return apiFetch<void>(`/api/connections/${uuid}${query}`, { method: "DELETE" });
 }
 
 export function deleteConnectionEvent(uuid: string, eventId: string) {
