@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeftIcon,
   BookmarkIcon,
@@ -8,13 +9,17 @@ import {
   Trash2Icon,
 } from "lucide-react";
 import { cn } from "cn";
-import { RISK_LABELS } from "@/lib/api";
+import {
+  deleteSavedApproach,
+  RISK_LABELS,
+  savedApproachesKeys,
+  type SavedApproach,
+} from "@/lib/api";
 import {
   groupSavedApproaches,
-  removeSavedApproach,
   useSavedApproaches,
-  type SavedApproach,
 } from "@/lib/saved-approaches";
+import { useOnline } from "@/lib/use-online";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -60,9 +65,24 @@ function timeAgo(iso: string): string {
   return `saved ${new Date(iso).toLocaleDateString()}`;
 }
 
-function SavedApproachCard({ item }: { item: SavedApproach }) {
+function SavedApproachCard({
+  item,
+  online,
+}: {
+  item: SavedApproach;
+  online: boolean;
+}) {
   const [open, setOpen] = useState(false);
+  const queryClient = useQueryClient();
   const { starter } = item;
+
+  const remove = useMutation({
+    mutationFn: () => deleteSavedApproach(item.uuid),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: savedApproachesKeys.all });
+      setOpen(false);
+    },
+  });
 
   return (
     <Card className="h-full">
@@ -136,15 +156,21 @@ function SavedApproachCard({ item }: { item: SavedApproach }) {
           <AlertDialogHeader>
             <AlertDialogTitle>Remove this saved approach?</AlertDialogTitle>
             <AlertDialogDescription>
-              “{starter.title}” will be removed from this device. This can&apos;t
-              be undone.
+              “{starter.title}” will be removed from your saved approaches. This
+              can&apos;t be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
+          {remove.isError && (
+            <p className="text-destructive text-xs">
+              Couldn&apos;t remove — check your connection and try again.
+            </p>
+          )}
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               variant="destructive"
-              onClick={() => removeSavedApproach(item.id)}
+              disabled={!online || remove.isPending}
+              onClick={() => remove.mutate()}
             >
               Remove
             </AlertDialogAction>
@@ -155,7 +181,15 @@ function SavedApproachCard({ item }: { item: SavedApproach }) {
   );
 }
 
-function ScenarioSection({ scenario, items }: { scenario: string; items: SavedApproach[] }) {
+function ScenarioSection({
+  scenario,
+  items,
+  online,
+}: {
+  scenario: string;
+  items: SavedApproach[];
+  online: boolean;
+}) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -185,10 +219,10 @@ function ScenarioSection({ scenario, items }: { scenario: string; items: SavedAp
           <CarouselContent className="-ml-3">
             {items.map((item) => (
               <CarouselItem
-                key={item.id}
+                key={item.uuid}
                 className="max-w-[340px] basis-[85%] py-2 pl-3"
               >
-                <SavedApproachCard item={item} />
+                <SavedApproachCard item={item} online={online} />
               </CarouselItem>
             ))}
           </CarouselContent>
@@ -201,6 +235,7 @@ function ScenarioSection({ scenario, items }: { scenario: string; items: SavedAp
 function SavedView() {
   const navigate = useNavigate();
   const saved = useSavedApproaches();
+  const online = useOnline();
   const groups = useMemo(() => groupSavedApproaches(saved), [saved]);
 
   return (
@@ -218,9 +253,15 @@ function SavedView() {
         Saved approaches
       </h1>
       <p className="text-muted-foreground mb-4 text-sm">
-        Grouped by scenario and kept on this device — ready even offline. Tap a
-        scenario to open it.
+        Grouped by scenario and synced to your account — your last saved copy is
+        available offline. Tap a scenario to open it.
       </p>
+
+      {!online && (
+        <p className="bg-amber-500/15 mb-3 rounded-xl px-3 py-2 text-center text-xs">
+          Offline — showing your saved copy. Reconnect to add or remove.
+        </p>
+      )}
 
       {saved.length === 0 ? (
         <Empty className="flex-1">
@@ -231,8 +272,7 @@ function SavedView() {
             <EmptyTitle>No saved approaches yet</EmptyTitle>
             <EmptyDescription>
               In a chat, tap the bookmark on any approach option, then pick the
-              scenario to file it under. Saved options work even without a
-              connection.
+              scenario to file it under.
             </EmptyDescription>
           </EmptyHeader>
         </Empty>
@@ -243,6 +283,7 @@ function SavedView() {
               key={group.scenario}
               scenario={group.scenario}
               items={group.items}
+              online={online}
             />
           ))}
         </div>

@@ -203,6 +203,31 @@ export const connectionsKeys = {
   detail: (uuid: string) => ["connections", "detail", uuid] as const,
 };
 
+/** A saved approach option as stored on the server, scoped to the user. */
+export interface SavedApproach {
+  uuid: string;
+  starter: Starter;
+  scenario: string;
+  overview?: string;
+  sessionId?: string;
+  savedAt: string;
+  updatedAt: string;
+}
+
+export const savedApproachesKeys = {
+  all: ["saved-approaches"] as const,
+  list: ["saved-approaches", "list"] as const,
+};
+
+export interface SaveSavedApproachBody {
+  starter: Starter;
+  scenario: string;
+  overview?: string;
+  sessionId?: string;
+  /** Client save time; server falls back to now if absent/invalid. */
+  savedAt?: string;
+}
+
 export interface SessionListItem {
   uuid: string;
   title: string;
@@ -326,6 +351,28 @@ export function suggestScenario(body: ScenarioSuggestionBody) {
     method: "POST",
     body: JSON.stringify(body),
   }).then((d) => d.scenario);
+}
+
+/** The signed-in user's saved approaches, newest first. */
+export function listSavedApproaches() {
+  return apiFetch<{ approaches: SavedApproach[] }>("/api/saved-approaches").then(
+    (d) => d.approaches,
+  );
+}
+
+/**
+ * Save (or move) an approach. The server dedupes by opener line, so re-saving
+ * the same opener updates its scenario instead of duplicating it.
+ */
+export function saveSavedApproach(body: SaveSavedApproachBody) {
+  return apiFetch<SavedApproach>("/api/saved-approaches", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function deleteSavedApproach(uuid: string) {
+  return apiFetch<void>(`/api/saved-approaches/${uuid}`, { method: "DELETE" });
 }
 
 export function getModelSettings() {
