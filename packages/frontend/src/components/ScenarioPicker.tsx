@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { SparklesIcon } from "lucide-react";
 import {
@@ -19,6 +19,8 @@ import {
   DrawerTitle,
 } from "@/components/ui/drawer";
 import { Spinner } from "@/components/ui/spinner";
+
+const SHEET_EXIT_MS = 500;
 
 /**
  * Bottom sheet shown when bookmarking an approach: pick the scenario it
@@ -60,6 +62,8 @@ export function ScenarioPicker({
     return { existing, scenarios: names };
   }, [saved]);
 
+  const wasOpen = useRef(false);
+
   const save = useMutation({
     mutationFn: (scenario: string) => {
       if (!starter) throw new Error("No approach selected");
@@ -72,8 +76,14 @@ export function ScenarioPicker({
       });
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: savedApproachesKeys.all });
       onOpenChange(false);
+      // Refresh the list (and the bookmark behind the sheet) only once the
+      // exit animation is done, so nothing reflows mid-animation.
+      window.setTimeout(() => {
+        void queryClient.invalidateQueries({
+          queryKey: savedApproachesKeys.all,
+        });
+      }, SHEET_EXIT_MS);
     },
   });
 
@@ -96,18 +106,22 @@ export function ScenarioPicker({
     onSuccess: (scenario) => save.mutate(scenario),
   });
 
+  // Reset any stale error when opening; don't reset on close, so the button
+  // label/spinner stay put while the drawer slides away.
+  useEffect(() => {
+    if (open && !wasOpen.current) {
+      suggest.reset();
+      save.reset();
+    }
+    wasOpen.current = open;
+  }, [open, suggest, save]);
+
   const busy = save.isPending || suggest.isPending;
 
   return (
     <Drawer
       open={open}
-      onOpenChange={(o) => {
-        if (!o) {
-          suggest.reset();
-          save.reset();
-        }
-        onOpenChange(o);
-      }}
+      onOpenChange={(o) => onOpenChange(o)}
       showSwipeHandle
     >
       <DrawerContent>
