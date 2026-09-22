@@ -60,6 +60,7 @@ export function ApproachOptions({
 }) {
   const saved = useSavedApproaches();
   const queryClient = useQueryClient();
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerStarter, setPickerStarter] = useState<Starter | null>(null);
   const remove = useMutation({
     mutationFn: deleteSavedApproach,
@@ -96,6 +97,7 @@ export function ApproachOptions({
       remove.mutate(existing.uuid);
     } else {
       setPickerStarter(starter);
+      setPickerOpen(true);
     }
   }
 
@@ -165,10 +167,8 @@ export function ApproachOptions({
         </p>
       )}
       <ScenarioPicker
-        open={pickerStarter !== null}
-        onOpenChange={(open) => {
-          if (!open) setPickerStarter(null);
-        }}
+        open={pickerOpen}
+        onOpenChange={setPickerOpen}
         starter={pickerStarter}
         overview={overview}
         sessionId={sessionId}
