@@ -1,13 +1,19 @@
 import { useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   BookmarkCheckIcon,
   BookmarkIcon,
   GitBranchIcon,
   TriangleAlertIcon,
 } from "lucide-react";
-import type { ApproachToolPart, Starter } from "@/lib/api";
-import { RISK_LABELS } from "@/lib/api";
-import { removeSavedApproach, useSavedApproaches } from "@/lib/saved-approaches";
+import {
+  deleteSavedApproach,
+  RISK_LABELS,
+  savedApproachesKeys,
+  type ApproachToolPart,
+  type Starter,
+} from "@/lib/api";
+import { useSavedApproaches } from "@/lib/saved-approaches";
 import { ScenarioPicker } from "@/components/ScenarioPicker";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -53,7 +59,14 @@ export function ApproachOptions({
   sessionId?: string | null;
 }) {
   const saved = useSavedApproaches();
+  const queryClient = useQueryClient();
   const [pickerStarter, setPickerStarter] = useState<Starter | null>(null);
+  const remove = useMutation({
+    mutationFn: deleteSavedApproach,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: savedApproachesKeys.all });
+    },
+  });
 
   if (part.state === "input-streaming") return <Loading />;
   if (part.state === "output-error") {
@@ -80,7 +93,7 @@ export function ApproachOptions({
       (s) => s.starter.openerLine === starter.openerLine,
     );
     if (existing) {
-      removeSavedApproach(existing.id);
+      remove.mutate(existing.uuid);
     } else {
       setPickerStarter(starter);
     }
@@ -135,6 +148,7 @@ export function ApproachOptions({
                     aria-label={isSaved(s) ? "Remove saved approach" : "Save approach"}
                     aria-pressed={isSaved(s)}
                     title={isSaved(s) ? "Saved" : "Save for later"}
+                    disabled={remove.isPending}
                     onClick={() => toggleSave(s)}
                   >
                     {isSaved(s) ? <BookmarkCheckIcon /> : <BookmarkIcon />}
@@ -145,6 +159,11 @@ export function ApproachOptions({
           ))}
         </CarouselContent>
       </Carousel>
+      {remove.isError && (
+        <p className="text-destructive text-xs">
+          Couldn&apos;t remove — check your connection and try again.
+        </p>
+      )}
       <ScenarioPicker
         open={pickerStarter !== null}
         onOpenChange={(open) => {

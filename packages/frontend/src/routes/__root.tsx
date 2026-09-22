@@ -7,6 +7,7 @@ import {
   setCachedAuth,
   useCachedAuth,
 } from "@/lib/auth-cache";
+import { clearSavedApproachCache } from "@/lib/saved-approaches";
 import { AuthForm } from "@/components/AuthForm";
 import { SessionDrawer } from "@/components/SessionDrawer";
 import { SplashScreen } from "@/components/SplashScreen";
@@ -139,6 +140,7 @@ function RootShell() {
                   variant="destructive"
                   onClick={() => {
                     clearCachedAuth();
+                    clearSavedApproachCache();
                     void authClient.signOut();
                   }}
                 >

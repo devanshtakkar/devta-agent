@@ -1,12 +1,14 @@
 import { useMemo } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { SparklesIcon } from "lucide-react";
-import { suggestScenario, type Starter } from "@/lib/api";
 import {
-  saveApproach,
-  SCENARIO_PRESETS,
-  useSavedApproaches,
-} from "@/lib/saved-approaches";
+  saveSavedApproach,
+  savedApproachesKeys,
+  suggestScenario,
+  type Starter,
+} from "@/lib/api";
+import { SCENARIO_PRESETS, useSavedApproaches } from "@/lib/saved-approaches";
+import { useOnline } from "@/lib/use-online";
 import { Button } from "@/components/ui/button";
 import {
   Drawer,
@@ -37,6 +39,8 @@ export function ScenarioPicker({
   sessionId?: string | null;
 }) {
   const saved = useSavedApproaches();
+  const queryClient = useQueryClient();
+  const online = useOnline();
 
   const { existing, scenarios } = useMemo(() => {
     const existing = new Set(saved.map((item) => item.scenario));
@@ -56,6 +60,23 @@ export function ScenarioPicker({
     return { existing, scenarios: names };
   }, [saved]);
 
+  const save = useMutation({
+    mutationFn: (scenario: string) => {
+      if (!starter) throw new Error("No approach selected");
+      return saveSavedApproach({
+        starter,
+        scenario,
+        overview,
+        sessionId: sessionId ?? undefined,
+        savedAt: new Date().toISOString(),
+      });
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: savedApproachesKeys.all });
+      onOpenChange(false);
+    },
+  });
+
   const suggest = useMutation({
     mutationFn: () => {
       if (!starter) throw new Error("No approach selected");
@@ -72,32 +93,19 @@ export function ScenarioPicker({
         existing: scenarios.filter((s) => existing.has(s)),
       });
     },
-    onSuccess: (scenario) => {
-      if (!starter) return;
-      saveApproach(starter, {
-        scenario,
-        overview,
-        sessionId: sessionId ?? undefined,
-      });
-      onOpenChange(false);
-    },
+    onSuccess: (scenario) => save.mutate(scenario),
   });
 
-  function choose(scenario: string) {
-    if (!starter) return;
-    saveApproach(starter, {
-      scenario,
-      overview,
-      sessionId: sessionId ?? undefined,
-    });
-    onOpenChange(false);
-  }
+  const busy = save.isPending || suggest.isPending;
 
   return (
     <Drawer
       open={open}
       onOpenChange={(o) => {
-        if (!o) suggest.reset();
+        if (!o) {
+          suggest.reset();
+          save.reset();
+        }
         onOpenChange(o);
       }}
       showSwipeHandle
@@ -113,6 +121,11 @@ export function ScenarioPicker({
         </DrawerHeader>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
+          {!online && (
+            <p className="text-muted-foreground mb-3 text-center text-xs">
+              Offline — connect to save this approach.
+            </p>
+          )}
           <div className="flex flex-wrap justify-center gap-2">
             {scenarios.map((scenario) => (
               <Button
@@ -121,8 +134,8 @@ export function ScenarioPicker({
                 size="sm"
                 variant={existing.has(scenario) ? "secondary" : "outline"}
                 className="rounded-full"
-                disabled={!starter || suggest.isPending}
-                onClick={() => choose(scenario)}
+                disabled={!starter || !online || busy}
+                onClick={() => save.mutate(scenario)}
               >
                 {scenario}
               </Button>
@@ -133,21 +146,30 @@ export function ScenarioPicker({
               Couldn&apos;t name it with AI — pick one above or try again.
             </p>
           )}
+          {save.isError && !suggest.isError && (
+            <p className="text-destructive mt-3 text-center text-xs">
+              Couldn&apos;t save — check your connection and try again.
+            </p>
+          )}
         </div>
 
         <DrawerFooter>
           <Button
             type="button"
             className="w-full"
-            disabled={!starter || suggest.isPending}
+            disabled={!starter || !online || busy}
             onClick={() => suggest.mutate()}
           >
-            {suggest.isPending ? (
+            {busy ? (
               <Spinner data-icon="inline-start" />
             ) : (
               <SparklesIcon data-icon="inline-start" />
             )}
-            {suggest.isPending ? "Naming the scenario…" : "Generate with AI"}
+            {suggest.isPending
+              ? "Naming the scenario…"
+              : save.isPending
+                ? "Saving…"
+                : "Generate with AI"}
           </Button>
         </DrawerFooter>
       </DrawerContent>

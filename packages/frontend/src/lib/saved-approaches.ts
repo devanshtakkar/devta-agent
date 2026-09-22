@@ -1,27 +1,17 @@
-import { useSyncExternalStore } from "react";
-import type { Starter } from "@/lib/api";
+import { useEffect, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
+import {
+  listSavedApproaches as fetchSavedApproaches,
+  savedApproachesKeys,
+  type SavedApproach,
+  type Starter,
+} from "@/lib/api";
 
 /**
- * An approach option the user bookmarked for later. Kept entirely on-device
- * (localStorage) so it survives offline and needs no account or network.
+ * Saved approaches are server-authoritative. The last synced list is cached in
+ * localStorage so `/saved` still renders when the device is offline; writes
+ * require a connection.
  */
-export interface SavedApproach {
-  id: string;
-  starter: Starter;
-  /** Scenario the user filed it under, e.g. "Gym", "Cafe". */
-  scenario: string;
-  /** The agent's read of the situation this option came from, if any. */
-  overview?: string;
-  /** The chat it was saved from, so we can offer a jump back. */
-  sessionId?: string;
-  savedAt: string;
-}
-
-export interface SaveApproachContext {
-  scenario: string;
-  overview?: string;
-  sessionId?: string;
-}
 
 /** Fallback group for entries saved before scenarios existed. */
 export const DEFAULT_SCENARIO = "Unsorted";
@@ -39,15 +29,12 @@ export const SCENARIO_PRESETS = [
   "Work",
 ] as const;
 
-const STORAGE_KEY = "devta-saved-approaches";
-
-let cache: SavedApproach[] | null = null;
-const listeners = new Set<() => void>();
+/** Last synced list + when it was fetched. */
+const CACHE_KEY = "devta-saved-approaches-cache";
 
 /**
- * Coerce a stored starter into a complete `Starter`. Tool output from older
- * chats may be missing fields (`gracefulExit`, `risk`, …), so we fill defaults
- * instead of discarding the saved option.
+ * Coerce a stored starter into a complete `Starter`. Older records may be
+ * missing fields (`gracefulExit`, `risk`, …), so we fill defaults.
  */
 function normalizeStarter(value: unknown): Starter | null {
   if (!value || typeof value !== "object") return null;
@@ -69,12 +56,11 @@ function normalizeStarter(value: unknown): Starter | null {
   };
 }
 
-/** Accepts legacy entries without a scenario and files them under the default. */
-function normalizeEntry(value: unknown): SavedApproach | null {
+function normalizeCached(value: unknown): SavedApproach | null {
   if (!value || typeof value !== "object") return null;
   const v = value as Partial<SavedApproach>;
   const starter = normalizeStarter(v.starter);
-  if (!starter || typeof v.id !== "string" || typeof v.savedAt !== "string") {
+  if (!starter || typeof v.uuid !== "string" || typeof v.savedAt !== "string") {
     return null;
   }
   const scenario =
@@ -82,131 +68,55 @@ function normalizeEntry(value: unknown): SavedApproach | null {
       ? v.scenario.trim()
       : DEFAULT_SCENARIO;
   return {
-    id: v.id,
+    uuid: v.uuid,
     starter,
     scenario,
     overview: typeof v.overview === "string" ? v.overview : undefined,
     sessionId: typeof v.sessionId === "string" ? v.sessionId : undefined,
     savedAt: v.savedAt,
+    updatedAt: typeof v.updatedAt === "string" ? v.updatedAt : v.savedAt,
   };
 }
 
-function readStorage(): SavedApproach[] {
-  if (typeof localStorage === "undefined") return [];
+/** The cached list plus the time it was fetched (for staleness). */
+export function readSavedApproachCache(): {
+  list: SavedApproach[];
+  at: number;
+} {
+  if (typeof localStorage === "undefined") return { list: [], at: 0 };
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed
-      .map(normalizeEntry)
-      .filter((entry): entry is SavedApproach => entry !== null);
+    const raw = localStorage.getItem(CACHE_KEY);
+    if (!raw) return { list: [], at: 0 };
+    const parsed = JSON.parse(raw) as { list?: unknown; at?: unknown };
+    const list = Array.isArray(parsed.list)
+      ? parsed.list
+          .map(normalizeCached)
+          .filter((entry): entry is SavedApproach => entry !== null)
+      : [];
+    const at = typeof parsed.at === "number" ? parsed.at : 0;
+    return { list, at };
   } catch {
-    // Corrupt or unavailable storage — start empty rather than crash.
-    return [];
+    return { list: [], at: 0 };
   }
 }
 
-/** Snapshot reader. Stable identity between writes keeps React happy. */
-function getSnapshot(): SavedApproach[] {
-  if (cache === null) cache = readStorage();
-  return cache;
-}
-
-function emit() {
-  for (const listener of listeners) listener();
-}
-
-function persist(next: SavedApproach[]) {
-  cache = next;
-  if (typeof localStorage !== "undefined") {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-    } catch {
-      // Quota/privacy errors shouldn't take the UI down.
-    }
+function writeSavedApproachCache(list: SavedApproach[]) {
+  if (typeof localStorage === "undefined") return;
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify({ list, at: Date.now() }));
+  } catch {
+    // Quota/privacy errors shouldn't take the UI down.
   }
-  emit();
 }
 
-function subscribe(listener: () => void) {
-  listeners.add(listener);
-  return () => {
-    listeners.delete(listener);
-  };
-}
-
-if (typeof window !== "undefined") {
-  // Keep multiple tabs in sync; the in-tab `emit` covers same-tab writes.
-  window.addEventListener("storage", (event) => {
-    if (event.key !== STORAGE_KEY) return;
-    cache = readStorage();
-    emit();
-  });
-  // A page restored from the back-forward cache keeps stale module state.
-  window.addEventListener("pageshow", (event) => {
-    if (!event.persisted) return;
-    cache = readStorage();
-    emit();
-  });
-}
-
-function newId(): string {
-  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
-    return crypto.randomUUID();
+/** Drop the cached list, e.g. on sign out so another user can't see it. */
+export function clearSavedApproachCache() {
+  if (typeof localStorage === "undefined") return;
+  try {
+    localStorage.removeItem(CACHE_KEY);
+  } catch {
+    // ignore
   }
-  return `saved-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-}
-
-export function listSavedApproaches(): SavedApproach[] {
-  return getSnapshot();
-}
-
-/** Match by opener line so re-saving the same option never duplicates it. */
-export function findSavedApproach(starter: Starter): SavedApproach | undefined {
-  return getSnapshot().find((s) => s.starter.openerLine === starter.openerLine);
-}
-
-export function isApproachSaved(starter: Starter): boolean {
-  return findSavedApproach(starter) !== undefined;
-}
-
-/** Existing scenario labels, most recently used first. */
-export function listScenarios(): string[] {
-  const seen = new Set<string>();
-  const scenarios: string[] = [];
-  for (const item of getSnapshot()) {
-    if (seen.has(item.scenario)) continue;
-    seen.add(item.scenario);
-    scenarios.push(item.scenario);
-  }
-  return scenarios;
-}
-
-/**
- * Save the starter under a scenario. If the same opener was already saved,
- * move it into the new scenario instead of duplicating it.
- */
-export function saveApproach(
-  starter: Starter,
-  context: SaveApproachContext,
-): SavedApproach {
-  const scenario = context.scenario.trim() || DEFAULT_SCENARIO;
-  const existing = findSavedApproach(starter);
-  const entry: SavedApproach = {
-    id: existing?.id ?? newId(),
-    starter: normalizeStarter(starter) ?? starter,
-    scenario,
-    overview: context.overview,
-    sessionId: context.sessionId,
-    savedAt: new Date().toISOString(),
-  };
-  persist([entry, ...getSnapshot().filter((s) => s.id !== entry.id)]);
-  return entry;
-}
-
-export function removeSavedApproach(id: string) {
-  persist(getSnapshot().filter((s) => s.id !== id));
 }
 
 export interface ScenarioGroup {
@@ -229,7 +139,24 @@ export function groupSavedApproaches(items: SavedApproach[]): ScenarioGroup[] {
   }));
 }
 
-/** Reactive list; re-renders the caller whenever saved options change. */
+/**
+ * The signed-in user's saved approaches. Served from the offline cache while
+ * the network is unavailable, refreshed from the server otherwise.
+ */
 export function useSavedApproaches(): SavedApproach[] {
-  return useSyncExternalStore(subscribe, getSnapshot, () => []);
+  const initial = useMemo(() => readSavedApproachCache(), []);
+  const { data } = useQuery({
+    queryKey: savedApproachesKeys.list,
+    queryFn: fetchSavedApproaches,
+    // Only seed from cache when it has content, so a cold start still fetches.
+    initialData: initial.list.length > 0 ? initial.list : undefined,
+    initialDataUpdatedAt: initial.at || undefined,
+    staleTime: 30_000,
+  });
+
+  useEffect(() => {
+    if (data) writeSavedApproachCache(data);
+  }, [data]);
+
+  return data ?? [];
 }
