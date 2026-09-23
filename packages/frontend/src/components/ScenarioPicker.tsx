@@ -117,6 +117,11 @@ export function ScenarioPicker({
   }, [open, suggest, save]);
 
   const busy = save.isPending || suggest.isPending;
+  // Keep the spinner and "Saving…" label steady while the sheet slides away:
+  // `isPending` drops to false the instant the save resolves, which snapped the
+  // button back to "Generate with AI" mid-close and blended the two states
+  // into a double-exposure. `isSuccess` stays true until we reset on reopen.
+  const pending = busy || save.isSuccess;
 
   return (
     <Drawer
@@ -168,23 +173,38 @@ export function ScenarioPicker({
         </div>
 
         <DrawerFooter>
-          <Button
-            type="button"
-            className="w-full"
-            disabled={!starter || !online || busy}
-            onClick={() => suggest.mutate()}
-          >
-            {busy ? (
+          {suggest.isPending ? (
+            <Button
+              key="naming"
+              type="button"
+              className="w-full animate-in zoom-in-95 duration-150"
+              disabled
+            >
               <Spinner data-icon="inline-start" />
-            ) : (
+              Naming the scenario…
+            </Button>
+          ) : pending ? (
+            <Button
+              key="saving"
+              type="button"
+              className="w-full animate-in zoom-in-95 duration-150"
+              disabled
+            >
+              <Spinner data-icon="inline-start" />
+              Saving…
+            </Button>
+          ) : (
+            <Button
+              key="idle"
+              type="button"
+              className="w-full animate-in zoom-in-95 duration-150"
+              disabled={!starter || !online}
+              onClick={() => suggest.mutate()}
+            >
               <SparklesIcon data-icon="inline-start" />
-            )}
-            {suggest.isPending
-              ? "Naming the scenario…"
-              : save.isPending
-                ? "Saving…"
-                : "Generate with AI"}
-          </Button>
+              Generate with AI
+            </Button>
+          )}
         </DrawerFooter>
       </DrawerContent>
     </Drawer>
