@@ -20,6 +20,20 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 
+/** API limit for a timeline event title (`eventBodySchema.title`). */
+const EVENT_TITLE_MAX = 200;
+
+/**
+ * Timeline titles are derived from user/agent text that can be much longer
+ * (summaries allow 2000 chars, openers 2000), so cap the title and mark it as
+ * shortened. The full text is still preserved in the event `details`.
+ */
+function eventTitle(text: string): string {
+  return text.length <= EVENT_TITLE_MAX
+    ? text
+    : `${text.slice(0, EVENT_TITLE_MAX - 1).trimEnd()}…`;
+}
+
 function Loading() {
   return (
     <div className="flex flex-col gap-3" role="status" aria-label="Preparing connection">
@@ -143,6 +157,12 @@ function DraftForm({
       const isUpdate = !!sessionConnection;
       const cleanWhatHappened = whatHappened.trim();
       const cleanSummary = summary.trim();
+      const cleanOpener = approachOpener.trim();
+      const title = isUpdate
+        ? cleanSummary || "Interaction update"
+        : cleanOpener
+          ? `Opened with: “${cleanOpener}”`
+          : "First approach";
       return createConnection({
         originSessionId: sessionId ?? undefined,
         name: name.trim(),
@@ -150,15 +170,11 @@ function DraftForm({
         summary: cleanSummary || undefined,
         metLocation: metLocation.trim() || undefined,
         metAt: metAt.trim() || undefined,
-        approachOpener: approachOpener.trim() || undefined,
+        approachOpener: cleanOpener || undefined,
         toolCallId,
         event: {
           type: isUpdate ? "note" : "approach",
-          title: isUpdate
-            ? cleanSummary || "Interaction update"
-            : approachOpener.trim()
-              ? `Opened with: “${approachOpener.trim()}”`
-              : "First approach",
+          title: eventTitle(title),
           details: cleanWhatHappened || undefined,
           occurredAt: metAt.trim() || undefined,
           location: metLocation.trim() || undefined,
