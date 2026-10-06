@@ -5,11 +5,10 @@ You are working in a new worktree. `packages/backend/.env` and
 `node_modules` is not shared between worktrees. Before running or testing the
 app, follow these steps exactly.
 
-Always use the server's reachable LAN IP, public IP, or DNS hostname in `.env`
-URLs — never `localhost` or `127.0.0.1`, even if the browser is running on the
-server itself. Use the same host consistently in frontend/backend environment
-URLs. Never use the shared cloudflared tunnel hostnames (e.g.
-`*.minepicoin.com`) for a worktree. See
+Always use the server's LAN IP in `.env` URLs — never `localhost`,
+`127.0.0.1`, a public IP, or a hostname. Use the same LAN IP consistently in
+frontend/backend environment URLs. Never use the shared cloudflared tunnel
+hostnames (e.g. `*.minepicoin.com`) for a worktree. See
 [agent-worktrees.md](agent-worktrees.md) for host-network and worktree guidance.
 
 ## Do this
@@ -40,9 +39,9 @@ URLs. Never use the shared cloudflared tunnel hostnames (e.g.
    `OPENROUTER_API_KEY` values from it into `packages/backend/.env`. If the
    file does not exist, ask the user for these two values.
 
-4. Set `$serverHost` to the LAN/public IP or DNS hostname that the testing
-   browser can reach. In `packages/backend/.env`, set `PORT` to the port from
-   step 1 and `BETTER_AUTH_URL` to `http://<serverHost>:<port>`.
+4. Set `$serverHost` to the server's LAN IP. In `packages/backend/.env`, set
+   `PORT` to the port from step 1 and `BETTER_AUTH_URL` to
+   `http://<serverHost>:<port>`.
 
 5. In `packages/frontend/.env` set `VITE_API_URL` to `http://<serverHost>:<port>`
    (same backend port), overwriting the tunnel value from the example.
@@ -80,7 +79,7 @@ with the port Vite actually prints before starting the backend.
 
 ```powershell
 $keys = "C:\home\kiki\keys\env-variables.txt"
-$serverHost = Read-Host "Reachable LAN/public IP or DNS hostname of this server"
+$serverHost = Read-Host "LAN IP address of this server"
 
 pnpm install
 
@@ -110,8 +109,8 @@ Write-Host "Backend :$port. Now run pnpm dev:frontend, read the printed port, an
 
 - Never commit `.env`; it is gitignored.
 - Install deps from the repo root with `pnpm install`, never inside `packages/*`.
-- `.env` URLs must use the reachable LAN/public IP or DNS hostname, never
-  `localhost` or `127.0.0.1`.
+- `.env` URLs must use the server LAN IP, never `localhost`, `127.0.0.1`, a
+  public IP, or a hostname.
 - `FRONTEND_URL` must equal the frontend origin Vite actually serves. If Vite
   bumped to `5174`, use `http://<serverHost>:5174`, not `5173`.
 - Start the backend *after* the frontend so CORS / auth origins are correct.
