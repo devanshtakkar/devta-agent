@@ -7,6 +7,7 @@
   "scripts": {
     "dev:frontend": "pnpm --filter d-frontend dev",
     "dev:backend": "pnpm --filter d-backend dev",
+    "dev": "concurrently -n frontend,backend -c cyan,magenta \"pnpm dev:frontend\" \"pnpm dev:backend\"",
     "build": "pnpm -r build",
     "lint": "pnpm --filter d-frontend lint",
     "tunnel:frontend": "cloudflared tunnel run --url http://localhost:5173 dev-win-5173",
