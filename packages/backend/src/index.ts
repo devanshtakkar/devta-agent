@@ -2,6 +2,7 @@ import express, { type Express } from "express";
 import cors from "cors";
 import morgan from "morgan";
 import os from "node:os";
+import type { Server } from "node:http";
 import { authHandler } from "./auth.js";
 import { env } from "./env.js";
 import { connectDb } from "./db.js";
@@ -41,10 +42,37 @@ async function main() {
     `MongoDB connected: ${mongo.connection.host}/${mongo.connection.name}`,
   );
   await seedDefaults();
-  app.listen(env.PORT, () => {
-    console.log(`d-backend listening on http://localhost:${env.PORT}`);
+  const { server, port } = await listenOnAvailablePort(env.PORT);
+  console.log(`d-backend listening on http://localhost:${port}`);
+  if (port !== env.PORT) {
+    console.warn(`Port ${env.PORT} is unavailable; using port ${port} instead.`);
+  }
+  {
     const lanIp = getLanIp();
-    if (lanIp) console.log(`d-backend on LAN: http://${lanIp}:${env.PORT}`);
+    if (lanIp) console.log(`d-backend on LAN: http://${lanIp}:${port}`);
+  }
+}
+
+function listenOnAvailablePort(startPort: number): Promise<{ server: Server; port: number }> {
+  return new Promise((resolve, reject) => {
+    const tryPort = (port: number) => {
+      if (port > 65535) {
+        reject(new Error(`No available port found starting from ${startPort}.`));
+        return;
+      }
+
+      const server = app.listen(port);
+      server.once("listening", () => resolve({ server, port }));
+      server.once("error", (err: NodeJS.ErrnoException) => {
+        if (err.code === "EADDRINUSE") {
+          tryPort(port + 1);
+        } else {
+          reject(err);
+        }
+      });
+    };
+
+    tryPort(startPort);
   });
 }
 
