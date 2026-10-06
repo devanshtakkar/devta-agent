@@ -2,9 +2,11 @@ import { DefaultChatTransport, type UIMessage } from "ai";
 
 const API_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? "http://localhost:3001";
 
-/** Metadata the API attaches to each assistant message. */
+/** Metadata the API attaches to chat messages. */
 export interface ChatMessageMetadata {
   model?: string;
+  /** Server-recorded time this user update was received. */
+  sentAt?: string;
 }
 
 export type ChatMessage = UIMessage<ChatMessageMetadata>;
