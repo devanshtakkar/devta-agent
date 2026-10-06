@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   BookmarkIcon,
   CheckIcon,
+  ChevronDownIcon,
   EllipsisVerticalIcon,
   MessageSquareIcon,
   MessageSquarePlusIcon,
@@ -74,6 +75,7 @@ export function SessionDrawer({
     { uuid: string; title: string; connection: ActiveConnectionInfo } | null
   >(null);
   const [confirmText, setConfirmText] = useState("");
+  const [savedApproachesExpanded, setSavedApproachesExpanded] = useState(false);
   const savedApproaches = useSavedApproaches();
   const savedGroups = useMemo(
     () => groupSavedApproaches(savedApproaches),
@@ -213,46 +215,66 @@ export function SessionDrawer({
 
           {savedApproaches.length > 0 && (
             <div className="border-border/60 border-t px-5 py-3">
-              <div className="mb-1.5 flex items-center justify-between gap-2">
-                <h2 className="font-heading text-sm font-semibold tracking-tight">
-                  Saved approaches
-                </h2>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="-mr-2 text-xs"
-                  nativeButton={false}
-                  render={<Link to="/saved" onClick={close} />}
+              <div className="flex items-center justify-between gap-2">
+                <button
+                  type="button"
+                  aria-expanded={savedApproachesExpanded}
+                  aria-controls="saved-approaches-list"
+                  onClick={() => setSavedApproachesExpanded((expanded) => !expanded)}
+                  className="-ml-2 flex min-h-10 min-w-0 flex-1 items-center gap-2 rounded-lg px-2 text-left hover:bg-muted/60"
                 >
-                  View all
-                </Button>
+                  <ChevronDownIcon
+                    className={`text-muted-foreground size-4 shrink-0 transition-transform ${
+                      savedApproachesExpanded ? "rotate-0" : "-rotate-90"
+                    }`}
+                  />
+                  <span className="font-heading truncate text-sm font-semibold tracking-tight">
+                    Saved approaches
+                  </span>
+                  <span className="text-muted-foreground text-xs">
+                    {savedApproaches.length}
+                  </span>
+                </button>
+                {savedApproachesExpanded && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="-mr-2 shrink-0 text-xs"
+                    nativeButton={false}
+                    render={<Link to="/saved" onClick={close} />}
+                  >
+                    View all
+                  </Button>
+                )}
               </div>
-              <ul className="flex flex-col gap-0.5">
-                {savedGroups.slice(0, 4).map((group) => (
-                  <li key={group.scenario}>
-                    <Link
-                      to="/saved"
-                      onClick={close}
-                      className="hover:bg-muted/60 flex items-center gap-2.5 rounded-xl px-2 py-2 transition-colors"
-                    >
-                      <BookmarkIcon className="text-muted-foreground size-4 shrink-0" />
-                      <span className="min-w-0 flex-1">
-                        <span className="flex items-center gap-2">
-                          <span className="truncate text-sm font-medium">
-                            {group.scenario}
+              {savedApproachesExpanded && (
+                <ul id="saved-approaches-list" className="mt-1 flex flex-col gap-0.5">
+                  {savedGroups.slice(0, 4).map((group) => (
+                    <li key={group.scenario}>
+                      <Link
+                        to="/saved"
+                        onClick={close}
+                        className="hover:bg-muted/60 flex items-center gap-2.5 rounded-xl px-2 py-2 transition-colors"
+                      >
+                        <BookmarkIcon className="text-muted-foreground size-4 shrink-0" />
+                        <span className="min-w-0 flex-1">
+                          <span className="flex items-center gap-2">
+                            <span className="truncate text-sm font-medium">
+                              {group.scenario}
+                            </span>
+                            <span className="text-muted-foreground text-xs">
+                              {group.items.length}
+                            </span>
                           </span>
-                          <span className="text-muted-foreground text-xs">
-                            {group.items.length}
+                          <span className="text-muted-foreground block truncate text-xs">
+                            “{group.items[0].starter.openerLine}”
                           </span>
                         </span>
-                        <span className="text-muted-foreground block truncate text-xs">
-                          “{group.items[0].starter.openerLine}”
-                        </span>
-                      </span>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           )}
 
