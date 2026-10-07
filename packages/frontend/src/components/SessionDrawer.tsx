@@ -25,6 +25,7 @@ import {
 } from "@/lib/api";
 import { groupSavedApproaches, useSavedApproaches } from "@/lib/saved-approaches";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -358,8 +359,18 @@ export function SessionDrawer({
                           >
                             <MessageSquareIcon className="text-muted-foreground size-5 shrink-0" />
                             <span className="min-w-0 flex-1">
-                              <span className="block truncate text-[15px] font-medium">
-                                {s.title}
+                              <span className="flex min-w-0 items-center gap-2">
+                                <span className="truncate text-[15px] font-medium">
+                                  {s.title}
+                                </span>
+                                {s.connectionName && (
+                                  <Badge
+                                    variant="secondary"
+                                    className="max-w-32 truncate"
+                                  >
+                                    {s.connectionName}
+                                  </Badge>
+                                )}
                               </span>
                               <span className="text-muted-foreground mt-0.5 block truncate text-xs">
                                 {s.messageCount === 0

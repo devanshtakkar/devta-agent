@@ -233,6 +233,7 @@ export interface SaveSavedApproachBody {
 export interface SessionListItem {
   uuid: string;
   title: string;
+  connectionName?: string | null;
   model?: string | null;
   updatedAt: string;
   createdAt: string;
