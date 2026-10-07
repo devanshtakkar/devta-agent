@@ -8,7 +8,7 @@ import {
   type ConnectionEventType,
   type ConnectionStage,
 } from "../models/Connection.js";
-import { appendEvent, deleteEvent, saveConnection } from "../services/connections.js";
+import { appendEvent, applyStage, deleteEvent, saveConnection } from "../services/connections.js";
 
 const router: Router = Router();
 
@@ -174,18 +174,21 @@ router.patch("/:uuid", requireAuth, async (req: Request, res: Response) => {
       .status(400)
       .json({ error: "Invalid request", details: parsedBody.error.flatten() });
   }
-  const patch: Record<string, unknown> = { ...parsedBody.data };
+  const { stage, ...fields } = parsedBody.data;
+  const patch: Record<string, unknown> = { ...fields };
   if (parsedBody.data.metAt !== undefined) {
     const d = parsedBody.data.metAt ? new Date(parsedBody.data.metAt) : null;
     patch.metAt = d && !Number.isNaN(d.getTime()) ? d : null;
   }
-  const doc = await Connection.findOneAndUpdate(
-    { uuid: parsedParam.data.uuid, userId: getUserId(req) },
-    { $set: patch },
-    { new: true },
-  ).lean<LeanConnection | null>();
+  const doc = await Connection.findOne({
+    uuid: parsedParam.data.uuid,
+    userId: getUserId(req),
+  });
   if (!doc) return res.status(404).json({ error: "Connection not found" });
-  return res.json(toDTO(doc));
+  doc.set(patch);
+  applyStage(doc, stage);
+  await doc.save();
+  return res.json(toDTO(doc.toObject() as LeanConnection));
 });
 
 router.post("/:uuid/events", requireAuth, async (req: Request, res: Response) => {

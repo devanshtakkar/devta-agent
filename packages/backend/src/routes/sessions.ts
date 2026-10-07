@@ -3,6 +3,8 @@ import { randomUUID } from "node:crypto";
 import {
   convertToModelMessages,
   generateObject,
+  hasToolCall,
+  stepCountIs,
   streamText,
   type UIMessage,
 } from "ai";
@@ -16,6 +18,11 @@ import {
   resolveModel,
 } from "../services/model-info.js";
 import { SYSTEM_PROMPT, chatTools } from "../ai/coach.js";
+import {
+  buildConnectionContext,
+  connectionHistoryTools,
+  withoutConnectionHistory,
+} from "../ai/connection-context.js";
 import { ChatSession } from "../models/ChatSession.js";
 import { Connection } from "../models/Connection.js";
 
@@ -578,10 +585,20 @@ router.post("/:uuid/chat", requireAuth, async (req: Request, res: Response) => {
 
   try {
     const openrouter = createOpenRouter({ apiKey: env.OPENROUTER_API_KEY });
+    const connectionContext = await buildConnectionContext(getUserId(req), session.uuid);
     const result = streamText({
       model: openrouter(modelId),
-      system: `${SYSTEM_PROMPT}\n\nMessage timeline:\n${messageTimeline(incoming as StoredMessage[])}`,
-      tools: chatTools,
+      system: `${SYSTEM_PROMPT}\n\nMessage timeline:\n${messageTimeline(incoming as StoredMessage[])}${connectionContext ? `\n\n${connectionContext}` : ""}`,
+      tools: { ...chatTools, ...connectionHistoryTools(getUserId(req), session.uuid) },
+      // Allow a history lookup and a coaching response, but stop after any UI proposal.
+      stopWhen: [
+        stepCountIs(3),
+        hasToolCall("proposeApproaches"),
+        hasToolCall("proposeBranches"),
+        hasToolCall("proposeConnection"),
+      ],
+      // At most two history pages per turn, then require the final coaching response.
+      prepareStep: ({ stepNumber }) => stepNumber >= 2 ? { toolChoice: "none" } : {},
       toolChoice:
         intent === "approaches"
           ? { type: "tool", toolName: "proposeApproaches" }
@@ -590,7 +607,7 @@ router.post("/:uuid/chat", requireAuth, async (req: Request, res: Response) => {
             : intent === "capture"
               ? { type: "tool", toolName: "proposeConnection" }
               : "auto",
-      messages: convertToModelMessages(forModel(incoming)),
+      messages: convertToModelMessages(forModel(withoutConnectionHistory(incoming))),
       providerOptions: { openrouter: { reasoning: { enabled: true } } },
     });
 

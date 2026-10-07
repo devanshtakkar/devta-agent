@@ -85,7 +85,7 @@ const connectionDraftSchema = z.object({
   stage: z
     .enum(CONNECTION_STAGES)
     .describe(
-      "Your read of where this stands now: approached, talking, contact, dating, intimate, relationship, engaged, married, failed or ghosted.",
+      "Your read of where this stands now: approached, talking, contact, dating, intimate, relationship, engaged, married, failed, ghosted, flaked, declined or taken. Use ghosted for silence; flaked for warm replies but no commitment and a soft exit; declined for an explicit no / not interested; taken for someone unavailable or already partnered. Respect closed outcomes and do not encourage pursuit.",
     ),
   summary: z
     .string()

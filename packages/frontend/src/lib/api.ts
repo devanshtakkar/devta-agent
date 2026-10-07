@@ -82,6 +82,9 @@ export const CONNECTION_STAGES = [
   "married",
   "failed",
   "ghosted",
+  "flaked",
+  "declined",
+  "taken",
 ] as const;
 
 export type ConnectionStage = (typeof CONNECTION_STAGES)[number];
@@ -111,6 +114,16 @@ export const STAGE_LABELS: Record<ConnectionStage, string> = {
   married: "Married",
   failed: "Failed",
   ghosted: "Ghosted",
+  flaked: "Flaked",
+  declined: "Declined / not interested",
+  taken: "Taken",
+};
+
+export const STAGE_DESCRIPTIONS: Partial<Record<ConnectionStage, string>> = {
+  ghosted: "No replies — the conversation went silent.",
+  flaked: "Warm replies, but no commitment — a soft exit.",
+  declined: "She clearly said no or that she isn't interested.",
+  taken: "She's unavailable or has a partner, so it never started.",
 };
 
 export interface ConnectionEvent {

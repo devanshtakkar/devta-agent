@@ -1,6 +1,6 @@
 import mongoose, { Schema } from "mongoose";
 
-/** Stage ladder a connection moves through. Terminal: failed / ghosted. */
+/** Stage ladder and closed outcomes a connection can move through. */
 export const CONNECTION_STAGES = [
   "approached",
   "talking",
@@ -12,6 +12,9 @@ export const CONNECTION_STAGES = [
   "married",
   "failed",
   "ghosted",
+  "flaked",
+  "declined",
+  "taken",
 ] as const;
 
 export type ConnectionStage = (typeof CONNECTION_STAGES)[number];
