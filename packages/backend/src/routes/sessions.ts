@@ -432,7 +432,25 @@ router.get("/", requireAuth, async (req: Request, res: Response) => {
         createdAt: Date;
       }[]
     >();
-  return res.json({ sessions: docs.map(toListItem) });
+  const sessions = docs.map(toListItem);
+  const connections = sessions.length
+    ? await Connection.find({
+        userId,
+        originSessionId: { $in: sessions.map((session) => session.uuid) },
+      })
+        .select("originSessionId name")
+        .lean<{ originSessionId: string; name: string }[]>()
+    : [];
+  const connectionNames = new Map(
+    connections.map((connection) => [connection.originSessionId, connection.name]),
+  );
+
+  return res.json({
+    sessions: sessions.map((session) => ({
+      ...session,
+      connectionName: connectionNames.get(session.uuid) ?? null,
+    })),
+  });
 });
 
 router.get("/:uuid", requireAuth, async (req: Request, res: Response) => {
