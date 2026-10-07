@@ -60,11 +60,11 @@ export function buildEvent(input: EventInput): StoredEvent {
 }
 
 /** Apply a stage change, recording a `stage_change` event when it moves. */
-function applyStage(
+export function applyStage(
   conn: { stage: ConnectionStage; events: unknown[] },
   stage: ConnectionStage | undefined,
-  sessionId: string | undefined,
-  toolCallId: string | undefined,
+  sessionId?: string,
+  toolCallId?: string,
 ) {
   if (!stage || stage === conn.stage) return;
   const previous = conn.stage;

@@ -33,7 +33,8 @@ export const Route = createFileRoute("/connections/")({
 });
 
 function stageVariant(stage: Connection["stage"]) {
-  if (stage === "failed" || stage === "ghosted") return "destructive" as const;
+  if (stage === "failed" || stage === "ghosted" || stage === "flaked" || stage === "declined")
+    return "destructive" as const;
   if (stage === "married" || stage === "engaged" || stage === "relationship")
     return "default" as const;
   return "secondary" as const;
