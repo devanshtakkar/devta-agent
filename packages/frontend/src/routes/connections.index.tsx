@@ -33,7 +33,8 @@ export const Route = createFileRoute("/connections/")({
 });
 
 function stageVariant(stage: Connection["stage"]) {
-  if (stage === "failed" || stage === "ghosted") return "destructive" as const;
+  if (stage === "failed" || stage === "ghosted" || stage === "flaked" || stage === "declined")
+    return "destructive" as const;
   if (stage === "married" || stage === "engaged" || stage === "relationship")
     return "default" as const;
   return "secondary" as const;
@@ -84,11 +85,13 @@ function ConnectionsView() {
             >
               <Card>
                 <CardHeader>
-                  <CardDescription className="flex items-center gap-2">
+                  <CardDescription className="flex min-w-0 items-center gap-2">
                     <Badge variant={stageVariant(c.stage)}>
                       {STAGE_LABELS[c.stage]}
                     </Badge>
-                    {c.metLocation && <span className="truncate">{c.metLocation}</span>}
+                    {c.metLocation && (
+                      <span className="min-w-0 flex-1 truncate">{c.metLocation}</span>
+                    )}
                   </CardDescription>
                   <CardTitle>{c.name}</CardTitle>
                   {(c.summary || c.events.length > 0) && (

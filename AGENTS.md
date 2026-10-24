@@ -44,6 +44,7 @@ engaged → married (terminal: failed / ghosted).
 
 ## Rules
 
+0. Before running or testing in a worktree, read [docs/agent-worktrees.md](docs/agent-worktrees.md) for environment setup, host-network access, port selection, and secret-handling rules.
 1. Never `git add packages/frontend` / `git add packages/backend` as gitlinks — they are plain
    directories in this monorepo (no nested `.git`). If `git status` ever shows them as a gitlink,
    a nested `.git` crept back in — delete it, do not commit the gitlink.
@@ -51,4 +52,3 @@ engaged → married (terminal: failed / ghosted).
 3. When testing the app, use the login credentials in `AGENTS.local.md` (gitignored, never
    commit it). If those credentials do not work, ask the user for updated ones — do not guess
    or create a new account.
- 

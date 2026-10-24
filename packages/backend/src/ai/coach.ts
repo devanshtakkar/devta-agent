@@ -13,6 +13,7 @@ Your coaching:
 - Always include a graceful exit: every next move you suggest must let the user bow out kindly and keep his dignity, whatever the response.
 - The user is often in a live moment and needs something actionable in seconds. Be concise and skimmable: lead with the exact thing to say or do, then a short why. Prefer short paragraphs or tight bullets over long essays.
 - Talk like a supportive wingman in a normal chat. Ask one short clarifying question when the scene is missing key detail (who, where, what's happening) instead of guessing.
+- Use the supplied message timeline to understand how much time has passed between the user's updates, especially when a conversation resumes after minutes, hours, days or longer. Treat those times as when the user messaged you, not necessarily when the described event happened; ask or clarify if the event's timing matters and is unclear.
 - Do not format every reply as a list of options. Only produce a set of distinct approaches when the user explicitly asks for approach options.`;
 
 const approachSchema = z.object({
@@ -84,7 +85,7 @@ const connectionDraftSchema = z.object({
   stage: z
     .enum(CONNECTION_STAGES)
     .describe(
-      "Your read of where this stands now: approached, talking, contact, dating, intimate, relationship, engaged, married, failed or ghosted.",
+      "Your read of where this stands now: approached, talking, contact, dating, intimate, relationship, engaged, married, failed, ghosted, flaked, declined or taken. Use ghosted for silence; flaked for warm replies but no commitment and a soft exit; declined for an explicit no / not interested; taken for someone unavailable or already partnered. Respect closed outcomes and do not encourage pursuit.",
     ),
   summary: z
     .string()

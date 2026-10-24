@@ -1,15 +1,19 @@
 import { useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeftIcon, MapPinIcon, MessagesSquareIcon, Trash2Icon } from "lucide-react";
+import { ArrowLeftIcon, MapPinIcon, MessagesSquareIcon, PencilIcon, Trash2Icon } from "lucide-react";
 import { queryClient } from "@/lib/query-client";
 import {
   connectionsKeys,
+  CONNECTION_STAGES,
   deleteConnection,
   deleteConnectionEvent,
   getConnection,
   STAGE_LABELS,
+  STAGE_DESCRIPTIONS,
+  updateConnection,
   type Connection,
+  type ConnectionStage,
   type ConnectionEvent,
 } from "@/lib/api";
 import {
@@ -26,6 +30,31 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Field,
+  FieldDescription,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+} from "@/components/ui/field";
+import {
+  Drawer,
+  DrawerContent,
+  DrawerDescription,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerTrigger,
+} from "@/components/ui/drawer";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Spinner } from "@/components/ui/spinner";
 import {
   Card,
   CardAction,
@@ -45,7 +74,8 @@ export const Route = createFileRoute("/connections/$connectionId")({
 });
 
 function stageVariant(stage: Connection["stage"]) {
-  if (stage === "failed" || stage === "ghosted") return "destructive" as const;
+  if (stage === "failed" || stage === "ghosted" || stage === "flaked" || stage === "declined")
+    return "destructive" as const;
   if (stage === "married" || stage === "engaged" || stage === "relationship")
     return "default" as const;
   return "secondary" as const;
@@ -196,6 +226,137 @@ function DeleteConnectionButton({
   );
 }
 
+function EditConnectionButton({ connection }: { connection: Connection }) {
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState(connection.name);
+  const [location, setLocation] = useState(connection.metLocation ?? "");
+  const [stage, setStage] = useState<ConnectionStage>(connection.stage);
+  const [submitted, setSubmitted] = useState(false);
+  const invalidName = submitted && !name.trim();
+  const mutation = useMutation({
+    mutationFn: () =>
+      updateConnection(connection.uuid, {
+        name: name.trim(),
+        metLocation: location.trim(),
+        stage,
+      }),
+    onSuccess: (updated) => {
+      queryClient.setQueryData(connectionsKeys.detail(connection.uuid), updated);
+      void queryClient.invalidateQueries({ queryKey: connectionsKeys.all });
+      setOpen(false);
+    },
+  });
+
+  return (
+    <Drawer
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (mutation.isPending) return;
+        if (nextOpen) {
+          setName(connection.name);
+          setLocation(connection.metLocation ?? "");
+          setStage(connection.stage);
+          setSubmitted(false);
+          mutation.reset();
+        }
+        setOpen(nextOpen);
+      }}
+    >
+      <DrawerTrigger render={<Button variant="outline" className="mt-4" />}>
+        <PencilIcon data-icon="inline-start" />
+        Edit details
+      </DrawerTrigger>
+      <DrawerContent className="mx-auto max-w-md">
+        <DrawerHeader>
+          <DrawerTitle>Edit connection</DrawerTitle>
+          <DrawerDescription>Update her name, where you met, or the current status.</DrawerDescription>
+        </DrawerHeader>
+        <form
+          className="flex min-h-0 flex-col overflow-y-auto"
+          onSubmit={(event) => {
+            event.preventDefault();
+            setSubmitted(true);
+            if (!name.trim() || mutation.isPending) return;
+            mutation.mutate();
+          }}
+        >
+          <FieldGroup className="p-4">
+            <Field data-invalid={invalidName} data-disabled={mutation.isPending}>
+              <FieldLabel htmlFor="connection-name">Name</FieldLabel>
+              <Input
+                id="connection-name"
+                value={name}
+                maxLength={120}
+                aria-invalid={invalidName}
+                aria-describedby={invalidName ? "connection-name-error" : undefined}
+                disabled={mutation.isPending}
+                onChange={(event) => setName(event.target.value)}
+              />
+              {invalidName && <FieldError id="connection-name-error">Enter a name or nickname.</FieldError>}
+            </Field>
+            <Field data-disabled={mutation.isPending}>
+              <FieldLabel htmlFor="connection-location">Location</FieldLabel>
+              <Input
+                id="connection-location"
+                value={location}
+                maxLength={200}
+                placeholder="Where you met"
+                disabled={mutation.isPending}
+                onChange={(event) => setLocation(event.target.value)}
+              />
+            </Field>
+            <Field data-disabled={mutation.isPending}>
+              <FieldLabel htmlFor="connection-status">Status</FieldLabel>
+              <Select
+                value={stage}
+                items={CONNECTION_STAGES.map((value) => ({ value, label: STAGE_LABELS[value] }))}
+                disabled={mutation.isPending}
+                onValueChange={(value) => { if (value) setStage(value); }}
+              >
+                <SelectTrigger
+                  id="connection-status"
+                  className="w-full"
+                  aria-describedby={STAGE_DESCRIPTIONS[stage] ? "connection-status-description" : undefined}
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent alignItemWithTrigger={false}>
+                  <SelectGroup>
+                    {CONNECTION_STAGES.map((value) => (
+                      <SelectItem key={value} value={value}>{STAGE_LABELS[value]}</SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+              {STAGE_DESCRIPTIONS[stage] && (
+                <FieldDescription id="connection-status-description">
+                  {STAGE_DESCRIPTIONS[stage]}
+                </FieldDescription>
+              )}
+            </Field>
+            {mutation.isError && <FieldError>Couldn’t save your changes. Please try again.</FieldError>}
+          </FieldGroup>
+          <DrawerFooter className="pb-[max(1rem,env(safe-area-inset-bottom))]">
+            <Button type="submit" disabled={mutation.isPending}>
+              {mutation.isPending && <Spinner data-icon="inline-start" />}
+              {mutation.isPending ? "Saving…" : "Save changes"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={mutation.isPending}
+              onClick={() => setOpen(false)}
+            >
+              Cancel
+            </Button>
+          </DrawerFooter>
+        </form>
+      </DrawerContent>
+    </Drawer>
+  );
+}
+
 function ConnectionView() {
   const { connectionId } = Route.useParams();
   const initial = Route.useLoaderData();
@@ -254,6 +415,8 @@ function ConnectionView() {
       {connection.summary && (
         <p className="text-muted-foreground mt-1 text-sm">{connection.summary}</p>
       )}
+
+      <EditConnectionButton connection={connection} />
 
       {connection.approachOpener && (
         <div className="border-border/60 bg-muted/50 mt-4 rounded-xl border px-3.5 py-2.5">

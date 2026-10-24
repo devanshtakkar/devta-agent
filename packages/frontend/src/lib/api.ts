@@ -2,9 +2,11 @@ import { DefaultChatTransport, type UIMessage } from "ai";
 
 const API_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? "http://localhost:3001";
 
-/** Metadata the API attaches to each assistant message. */
+/** Metadata the API attaches to chat messages. */
 export interface ChatMessageMetadata {
   model?: string;
+  /** Server-recorded time this user update was received. */
+  sentAt?: string;
 }
 
 export type ChatMessage = UIMessage<ChatMessageMetadata>;
@@ -80,6 +82,9 @@ export const CONNECTION_STAGES = [
   "married",
   "failed",
   "ghosted",
+  "flaked",
+  "declined",
+  "taken",
 ] as const;
 
 export type ConnectionStage = (typeof CONNECTION_STAGES)[number];
@@ -109,6 +114,16 @@ export const STAGE_LABELS: Record<ConnectionStage, string> = {
   married: "Married",
   failed: "Failed",
   ghosted: "Ghosted",
+  flaked: "Flaked",
+  declined: "Declined / not interested",
+  taken: "Taken",
+};
+
+export const STAGE_DESCRIPTIONS: Partial<Record<ConnectionStage, string>> = {
+  ghosted: "No replies — the conversation went silent.",
+  flaked: "Warm replies, but no commitment — a soft exit.",
+  declined: "She clearly said no or that she isn't interested.",
+  taken: "She's unavailable or has a partner, so it never started.",
 };
 
 export interface ConnectionEvent {
@@ -231,6 +246,7 @@ export interface SaveSavedApproachBody {
 export interface SessionListItem {
   uuid: string;
   title: string;
+  connectionName?: string | null;
   model?: string | null;
   updatedAt: string;
   createdAt: string;
