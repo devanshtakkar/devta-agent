@@ -44,7 +44,7 @@ engaged → married (terminal: failed / ghosted).
 
 ## Rules
 
-0. Before running or testing in a worktree, read [docs/agent-worktrees.md](docs/agent-worktrees.md) for environment setup, host-network access, port selection, and secret-handling rules.
+0. Before running or testing in any checkout (including the main checkout and all worktrees), read [docs/agent-worktrees.md](docs/agent-worktrees.md) for environment setup, host-network access, port selection, and secret-handling rules. For all development and testing, bind frontend/backend servers to `0.0.0.0` and use the server's LAN IP with the actual ports for frontend/backend URLs, including `BETTER_AUTH_URL`, `VITE_API_URL`, and `FRONTEND_URL` — never `localhost`, `127.0.0.1`, a public IP, or a hostname. Do not expose development servers publicly.
 1. Never `git add packages/frontend` / `git add packages/backend` as gitlinks — they are plain
    directories in this monorepo (no nested `.git`). If `git status` ever shows them as a gitlink,
    a nested `.git` crept back in — delete it, do not commit the gitlink.
