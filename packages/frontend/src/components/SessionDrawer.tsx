@@ -3,6 +3,7 @@ import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   BookmarkIcon,
+  CalendarDaysIcon,
   CheckIcon,
   ChevronDownIcon,
   EllipsisVerticalIcon,
@@ -446,6 +447,7 @@ export function SessionDrawer({
           </div>
 
           <footer className="border-border/60 border-t px-3 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+            <Button variant="ghost" className="h-11 w-full justify-start" nativeButton={false} render={<Link to="/shifts" onClick={close} />}><CalendarDaysIcon data-icon="inline-start" />Shift tracker</Button>
             <Button
               variant="ghost"
               className="h-11 w-full justify-start text-[15px]"

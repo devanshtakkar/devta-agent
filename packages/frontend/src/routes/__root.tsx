@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, Outlet, createRootRoute } from "@tanstack/react-router";
-import { BookmarkIcon, HeartIcon, LogOut, MenuIcon } from "lucide-react";
+import { BookmarkIcon, CalendarDaysIcon, HeartIcon, LogOut, MenuIcon } from "lucide-react";
 import { authClient, useSession } from "@/lib/auth-client";
 import {
   clearCachedAuth,
@@ -107,6 +107,7 @@ function RootShell() {
           </span>
         </span>
         <div className="flex items-center gap-2">
+          <Button size="icon-sm" variant="ghost" aria-label="Shift tracker" nativeButton={false} render={<Link to="/shifts" />}><CalendarDaysIcon /></Button>
           <Button
             size="icon-sm"
             variant="ghost"

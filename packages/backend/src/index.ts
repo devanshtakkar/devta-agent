@@ -8,6 +8,7 @@ import { connectDb } from "./db.js";
 import { seedDefaults } from "./services/config.js";
 import sessionsRouter from "./routes/sessions.js";
 import connectionsRouter from "./routes/connections.js";
+import regularsRouter from "./routes/regulars.js";
 import configRouter from "./routes/config.js";
 import modelsRouter from "./routes/models.js";
 import scenariosRouter from "./routes/scenarios.js";
@@ -30,6 +31,7 @@ app.all("/api/auth/*", authHandler);
 
 app.use("/api/sessions", sessionsRouter);
 app.use("/api/connections", connectionsRouter);
+app.use("/api/regulars", regularsRouter);
 app.use("/api/config", configRouter);
 app.use("/api/models", modelsRouter);
 app.use("/api/scenarios", scenariosRouter);
