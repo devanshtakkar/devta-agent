@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link, Outlet, createRootRoute } from "@tanstack/react-router";
+import { Link, Outlet, createRootRoute, useRouterState } from "@tanstack/react-router";
 import { BookmarkIcon, HeartIcon, LogOut, MenuIcon } from "lucide-react";
 import { authClient, useSession } from "@/lib/auth-client";
 import {
@@ -27,6 +27,8 @@ import {
 } from "@/components/ui/alert-dialog";
 
 function RootShell() {
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const isChatScreen = pathname === "/" || pathname.startsWith("/s/");
   const { data: session, isPending, error } = useSession();
   const cachedAuth = useCachedAuth();
   const [online, setOnline] = useState(navigator.onLine);
@@ -116,7 +118,7 @@ function RootShell() {
           >
             <HeartIcon />
           </Button>
-          <ModelUsage />
+          {isChatScreen && <ModelUsage />}
           <ThemeToggle />
           <AlertDialog>
             <AlertDialogTrigger

@@ -15,6 +15,8 @@ import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as ConnectionsIndexRouteImport } from './routes/connections.index'
 import { Route as ConnectionsConnectionIdRouteImport } from './routes/connections.$connectionId'
 import { Route as SSessionIdRouteImport } from './routes/s.$sessionId'
+import { Route as ShiftsIndexRouteImport } from './routes/shifts.index'
+import { Route as ShiftsRegularIdRouteImport } from './routes/shifts.$regularId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -46,6 +48,16 @@ const SSessionIdRoute = SSessionIdRouteImport.update({
   path: '/s/$sessionId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ShiftsIndexRoute = ShiftsIndexRouteImport.update({
+  id: '/shifts/',
+  path: '/shifts/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ShiftsRegularIdRoute = ShiftsRegularIdRouteImport.update({
+  id: '/shifts/$regularId',
+  path: '/shifts/$regularId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -53,7 +65,9 @@ export interface FileRoutesByFullPath {
   '/settings': typeof SettingsRoute
   '/connections/$connectionId': typeof ConnectionsConnectionIdRoute
   '/s/$sessionId': typeof SSessionIdRoute
+  '/shifts/$regularId': typeof ShiftsRegularIdRoute
   '/connections/': typeof ConnectionsIndexRoute
+  '/shifts/': typeof ShiftsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -61,7 +75,9 @@ export interface FileRoutesByTo {
   '/settings': typeof SettingsRoute
   '/connections/$connectionId': typeof ConnectionsConnectionIdRoute
   '/s/$sessionId': typeof SSessionIdRoute
+  '/shifts/$regularId': typeof ShiftsRegularIdRoute
   '/connections': typeof ConnectionsIndexRoute
+  '/shifts': typeof ShiftsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -70,7 +86,9 @@ export interface FileRoutesById {
   '/settings': typeof SettingsRoute
   '/connections/$connectionId': typeof ConnectionsConnectionIdRoute
   '/s/$sessionId': typeof SSessionIdRoute
+  '/shifts/$regularId': typeof ShiftsRegularIdRoute
   '/connections/': typeof ConnectionsIndexRoute
+  '/shifts/': typeof ShiftsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -80,7 +98,9 @@ export interface FileRouteTypes {
     | '/settings'
     | '/connections/$connectionId'
     | '/s/$sessionId'
+    | '/shifts/$regularId'
     | '/connections/'
+    | '/shifts/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -88,7 +108,9 @@ export interface FileRouteTypes {
     | '/settings'
     | '/connections/$connectionId'
     | '/s/$sessionId'
+    | '/shifts/$regularId'
     | '/connections'
+    | '/shifts'
   id:
     | '__root__'
     | '/'
@@ -96,7 +118,9 @@ export interface FileRouteTypes {
     | '/settings'
     | '/connections/$connectionId'
     | '/s/$sessionId'
+    | '/shifts/$regularId'
     | '/connections/'
+    | '/shifts/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -105,7 +129,9 @@ export interface RootRouteChildren {
   SettingsRoute: typeof SettingsRoute
   ConnectionsConnectionIdRoute: typeof ConnectionsConnectionIdRoute
   SSessionIdRoute: typeof SSessionIdRoute
+  ShiftsRegularIdRoute: typeof ShiftsRegularIdRoute
   ConnectionsIndexRoute: typeof ConnectionsIndexRoute
+  ShiftsIndexRoute: typeof ShiftsIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -152,6 +178,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SSessionIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/shifts/': {
+      id: '/shifts/'
+      path: '/shifts'
+      fullPath: '/shifts/'
+      preLoaderRoute: typeof ShiftsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/shifts/$regularId': {
+      id: '/shifts/$regularId'
+      path: '/shifts/$regularId'
+      fullPath: '/shifts/$regularId'
+      preLoaderRoute: typeof ShiftsRegularIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -161,7 +201,9 @@ const rootRouteChildren: RootRouteChildren = {
   SettingsRoute: SettingsRoute,
   ConnectionsConnectionIdRoute: ConnectionsConnectionIdRoute,
   SSessionIdRoute: SSessionIdRoute,
+  ShiftsRegularIdRoute: ShiftsRegularIdRoute,
   ConnectionsIndexRoute: ConnectionsIndexRoute,
+  ShiftsIndexRoute: ShiftsIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
