@@ -331,7 +331,35 @@ export function chatTransport(uuid: string) {
   return new DefaultChatTransport<ChatMessage>({
     api: `${API_URL}/api/sessions/${uuid}/chat`,
     credentials: "include",
+    prepareSendMessagesRequest: ({ body, id, messages, trigger, messageId }) => ({
+      body: { ...body, id, messages: capChatImages(messages), trigger, messageId },
+    }),
   });
+}
+
+function capChatImages(messages: ChatMessage[]): ChatMessage[] {
+  // useChat retains the full transcript in memory. Mirror the server's storage
+  // budget so repeated image sends don't eventually exceed its JSON body limit.
+  let budget = 8_000_000;
+  const capped = [...messages];
+  for (let i = capped.length - 1; i >= 0; i--) {
+    const message = capped[i];
+    const parts = message.parts.filter((part) => {
+      if (
+        part.type !== "file" ||
+        !part.mediaType?.startsWith("image/") ||
+        !part.url?.startsWith("data:")
+      ) {
+        return true;
+      }
+      const bytes = dataUrlBytes(part.url);
+      if (bytes > budget) return false;
+      budget -= bytes;
+      return true;
+    });
+    if (parts.length !== message.parts.length) capped[i] = { ...message, parts };
+  }
+  return capped;
 }
 
 export function listSessions() {

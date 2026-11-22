@@ -278,8 +278,8 @@ function toStoredMessage(message: UIMessage): StoredMessage {
  * leave a tool-only assistant turn empty (tool parts with no result are also
  * dropped during conversion), which providers reject — so drop those too.
  *
- * Only the most recent screenshot is sent as image context; older images stay
- * stored for history but are stripped from the model prompt to bound tokens.
+ * Only the images from the most recent message with attachments are sent as
+ * image context. Older images stay in history but are stripped from the prompt.
  */
 function forModel(messages: UIMessage[]): UIMessage[] {
   let lastImageIndex = -1;

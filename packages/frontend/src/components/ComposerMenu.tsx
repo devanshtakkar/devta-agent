@@ -9,13 +9,17 @@ import {
 import { cn } from "cn";
 
 export function ComposerMenu({
-  onAddImage,
+  onAddImages,
+  imageLimit,
+  imageLimitReached,
   onApproaches,
   onSaveApproach,
   disabled,
   approachActive,
 }: {
-  onAddImage: () => void;
+  onAddImages: () => void;
+  imageLimit: number;
+  imageLimitReached: boolean;
   onApproaches: () => void;
   onSaveApproach: () => void;
   disabled?: boolean;
@@ -79,7 +83,8 @@ export function ComposerMenu({
               </span>
             </Menu.Item>
             <Menu.Item
-              onClick={onAddImage}
+              onClick={onAddImages}
+              disabled={imageLimitReached}
               className={cn(
                 "flex cursor-default items-center gap-2.5 rounded-xl px-3 py-2 text-sm outline-none select-none",
                 "data-highlighted:bg-accent data-highlighted:text-accent-foreground",
@@ -88,9 +93,11 @@ export function ComposerMenu({
             >
               <ImagePlusIcon className="size-4" />
               <span className="flex flex-1 flex-col">
-                Add image
+                Add images
                 <span className="text-muted-foreground text-xs">
-                  Screenshot of your chat or a photo
+                  {imageLimitReached
+                    ? `Image limit reached (${imageLimit})`
+                    : `Up to ${imageLimit} screenshots or photos`}
                 </span>
               </span>
             </Menu.Item>

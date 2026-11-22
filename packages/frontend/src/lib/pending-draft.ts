@@ -1,6 +1,8 @@
+import type { FileUIPart } from "ai";
+
 export interface PendingDraft {
   text: string;
-  imageDataUrl?: string;
+  files: FileUIPart[];
   intent?: "approaches" | "capture";
   /** Model picked for the first message of the new chat. */
   model?: string;
