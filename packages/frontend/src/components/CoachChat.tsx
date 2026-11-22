@@ -53,8 +53,9 @@ import { Badge } from "@/components/ui/badge";
 import {
   Attachment,
   AttachmentAction,
+  AttachmentActions,
   AttachmentContent,
-  AttachmentDescription,
+  AttachmentGroup,
   AttachmentMedia,
   AttachmentTitle,
 } from "@/components/ui/attachment";
@@ -79,6 +80,7 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 
 const QUICK = ["Cafe", "Restaurant", "Street", "Party", "Campus"];
+const MAX_COMPOSER_IMAGES = 5;
 
 const APPROACH_PROMPT =
   "Give me 5 concrete approaches for what to do right now, based on our conversation.";
@@ -92,6 +94,10 @@ function imagePart(dataUrl: string): FileUIPart {
   return { type: "file", mediaType, url: dataUrl, filename: `image.${ext}` };
 }
 
+function draftMessage({ text, files }: PendingDraft) {
+  return text ? { text, files } : { files };
+}
+
 function stageVariant(stage: ConnectionStage) {
   if (stage === "failed" || stage === "ghosted" || stage === "flaked" || stage === "declined")
     return "destructive" as const;
@@ -101,30 +107,29 @@ function stageVariant(stage: ConnectionStage) {
 }
 
 function UserParts({ message }: { message: ChatMessage }) {
+  const images = message.parts.filter(
+    (part): part is FileUIPart => part.type === "file" && part.mediaType?.startsWith("image/"),
+  );
   return (
     <>
-      {message.parts.map((part, i) => {
-        if (part.type === "text") {
-          return (
-            <Bubble key={i} variant="default" align="end">
-              <BubbleContent>{(part as TextUIPart).text}</BubbleContent>
-            </Bubble>
-          );
-        }
-        if (part.type === "file" && (part as FileUIPart).mediaType?.startsWith("image/")) {
-          return (
-            <Attachment key={i} state="done" size="sm" className="self-end">
+      {images.length > 0 && (
+        <AttachmentGroup className="max-w-full self-end" tabIndex={0} role="group" aria-label="Attached images">
+          {images.map((image, i) => (
+            <Attachment key={i} state="done" size="sm">
               <AttachmentMedia variant="image">
-                <img src={(part as FileUIPart).url} alt="scene context" />
+                <img src={image.url} alt={`Attached image ${i + 1}`} />
               </AttachmentMedia>
-              <AttachmentContent>
-                <AttachmentTitle>Screenshot</AttachmentTitle>
-              </AttachmentContent>
             </Attachment>
-          );
-        }
-        return null;
-      })}
+          ))}
+        </AttachmentGroup>
+      )}
+      {message.parts.map((part, i) =>
+        part.type === "text" && part.text.trim() ? (
+          <Bubble key={i} variant="default" align="end">
+            <BubbleContent>{part.text}</BubbleContent>
+          </Bubble>
+        ) : null,
+      )}
     </>
   );
 }
@@ -204,13 +209,15 @@ export function CoachChat({ sessionId }: { sessionId: string | null }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [situation, setSituation] = useState("");
-  const [imageDataUrl, setImageDataUrl] = useState<string | undefined>();
+  const [images, setImages] = useState<{ id: number; name: string; part: FileUIPart }[]>([]);
+  const [preparingImages, setPreparingImages] = useState(false);
   const [imageError, setImageError] = useState<string | undefined>();
   const [approachActive, setApproachActive] = useState(false);
   const [stopped, setStopped] = useState(false);
   const [creating, setCreating] = useState(false);
   const [modelOverride, setModelOverride] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const nextImageId = useRef(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const firstMessageRef = useRef(false);
 
@@ -311,12 +318,11 @@ export function CoachChat({ sessionId }: { sessionId: string | null }) {
     if (!sessionId) return;
     const draft = takePendingDraft();
     if (!draft) return;
-    const files = draft.imageDataUrl ? [imagePart(draft.imageDataUrl)] : undefined;
     const body: { intent?: string; model?: string } = {};
     if (draft.intent) body.intent = draft.intent;
     if (draft.model) body.model = draft.model;
     void sendMessage(
-      { text: draft.text, files },
+      draftMessage(draft),
       Object.keys(body).length > 0 ? { body } : undefined,
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -324,20 +330,46 @@ export function CoachChat({ sessionId }: { sessionId: string | null }) {
 
   const busy = status === "submitted" || status === "streaming";
   const isFirstMessage = messages.length === 0;
+  const composerBusy = busy || creating || preparingImages;
+  const hasSendableDraft = Boolean(situation.trim() || images.length || (approachActive && !isFirstMessage));
 
   // Offer a retry on the last turn when the generation failed or the user
   // stopped it partway (an aborted stream ends in `ready`, not `error`).
   const canRetry = !busy && (status === "error" || stopped);
 
-  async function onPickImage(file: File | undefined) {
-    if (!file) return;
-    try {
-      setImageDataUrl(await fileToDataUrl(file));
-      setImageError(undefined);
-    } catch {
-      setImageDataUrl(undefined);
-      setImageError("Couldn't attach that image. Try a smaller one.");
+  async function onPickImages(files: File[]) {
+    if (composerBusy || files.length === 0) return;
+    const remaining = MAX_COMPOSER_IMAGES - images.length;
+    setImageError(undefined);
+    setPreparingImages(true);
+    const added: typeof images = [];
+    let failed = 0;
+    // Decode one image at a time to avoid keeping several full-size photos in memory.
+    for (const file of files.slice(0, remaining)) {
+      try {
+        const part = imagePart(await fileToDataUrl(file));
+        added.push({ id: nextImageId.current++, name: file.name, part });
+      } catch {
+        failed++;
+      }
     }
+    setImages((current) => [...current, ...added]);
+    const warnings = [];
+    if (files.length > remaining) {
+      warnings.push(`You can attach up to ${MAX_COMPOSER_IMAGES} images per message.`);
+    }
+    if (failed > 0) {
+      warnings.push(`Couldn't attach ${failed === 1 ? "one image" : `${failed} images`}. Try a different file.`);
+    }
+    setImageError(warnings.join(" ") || undefined);
+    setPreparingImages(false);
+  }
+
+  function clearComposer() {
+    setSituation("");
+    setImages([]);
+    setImageError(undefined);
+    setApproachActive(false);
   }
 
   async function startNewChat(draft: PendingDraft) {
@@ -353,10 +385,7 @@ export function CoachChat({ sessionId }: { sessionId: string | null }) {
         messages: [],
       });
       setPendingDraft(draft);
-      setSituation("");
-      setImageDataUrl(undefined);
-      setImageError(undefined);
-      setApproachActive(false);
+      clearComposer();
       void navigate({
         to: "/s/$sessionId",
         params: { sessionId: created.uuid },
@@ -369,55 +398,31 @@ export function CoachChat({ sessionId }: { sessionId: string | null }) {
     }
   }
 
-  async function submit(prefill?: string) {
-    if (busy || creating) return;
-    const text = (prefill ?? situation).trim();
-    const useApproaches = approachActive;
-    // The first message needs the user's own context; later runs can request
-    // approaches with no input at all.
-    const canSend = text.length > 0 || (useApproaches && !isFirstMessage);
-    if (!canSend) return;
-
-    const intent = useApproaches ? ("approaches" as const) : undefined;
-
+  function sendDraft(text: string, intent?: PendingDraft["intent"]) {
+    const draft: PendingDraft = {
+      text,
+      files: images.map(({ part }) => part),
+      intent,
+      model: selectedModel ?? undefined,
+    };
     if (sessionId === null) {
-      await startNewChat({
-        text: text || APPROACH_PROMPT,
-        imageDataUrl,
-        intent,
-        model: selectedModel ?? undefined,
-      });
+      void startNewChat(draft);
       return;
     }
+    clearComposer();
+    void sendMessage(draftMessage(draft), requestOptions(intent));
+  }
 
-    const files = imageDataUrl ? [imagePart(imageDataUrl)] : undefined;
-    const messageText = text || APPROACH_PROMPT;
-    setSituation("");
-    setImageDataUrl(undefined);
-    setImageError(undefined);
-    setApproachActive(false);
-    void sendMessage(
-      files && files.length > 0 ? { text: messageText, files } : { text: messageText },
-      requestOptions(intent),
-    );
+  function submit(prefill?: string) {
+    if (composerBusy) return;
+    const text = (prefill ?? situation).trim();
+    if (!text && !hasSendableDraft) return;
+    sendDraft(text || (approachActive ? APPROACH_PROMPT : ""), approachActive ? "approaches" : undefined);
   }
 
   function saveApproach() {
-    if (busy || creating) return;
-    const text = situation.trim() || CAPTURE_PROMPT;
-    if (sessionId === null) {
-      void startNewChat({
-        text,
-        imageDataUrl,
-        intent: "capture",
-        model: selectedModel ?? undefined,
-      });
-      return;
-    }
-    setSituation("");
-    setImageDataUrl(undefined);
-    setApproachActive(false);
-    void sendMessage({ text }, requestOptions("capture"));
+    if (composerBusy) return;
+    sendDraft(situation.trim() || CAPTURE_PROMPT, "capture");
   }
 
   function toggleApproaches() {
@@ -577,7 +582,7 @@ export function CoachChat({ sessionId }: { sessionId: string | null }) {
                   size="sm"
                   variant="outline"
                   className="shrink-0 rounded-full"
-                  disabled={busy || creating}
+                  disabled={composerBusy}
                   onClick={() =>
                     submit(
                       `I'm in a ${q.toLowerCase()}. There's a girl nearby I'd like to talk to politely. Quick context: `,
@@ -589,34 +594,52 @@ export function CoachChat({ sessionId }: { sessionId: string | null }) {
               ))}
             </div>
           )}
-          {imageDataUrl && (
-            <Attachment state="done" size="sm" className="mb-2">
-              <AttachmentMedia variant="image">
-                <img src={imageDataUrl} alt="context" />
-              </AttachmentMedia>
-              <AttachmentContent>
-                <AttachmentTitle>Screenshot</AttachmentTitle>
-                <AttachmentDescription>Attached to your next message</AttachmentDescription>
-              </AttachmentContent>
-              <AttachmentAction
-                aria-label="Remove image"
-                onClick={() => setImageDataUrl(undefined)}
-              >
-                <XIcon />
-              </AttachmentAction>
-            </Attachment>
+          {images.length > 0 && (
+            <AttachmentGroup className="mb-2" role="group" aria-label="Images to send">
+              {images.map(({ id, name, part }) => (
+                <Attachment key={id} state="done" size="sm" className="max-w-48 flex-nowrap">
+                  <AttachmentMedia variant="image">
+                    <img src={part.url} alt="" />
+                  </AttachmentMedia>
+                  <AttachmentContent>
+                    <AttachmentTitle title={name}>{name}</AttachmentTitle>
+                  </AttachmentContent>
+                  <AttachmentActions>
+                    <AttachmentAction
+                      type="button"
+                      size="icon-sm"
+                      disabled={creating}
+                      aria-label={`Remove ${name}`}
+                      onClick={() => {
+                        setImages((current) => current.filter((image) => image.id !== id));
+                        setImageError(undefined);
+                      }}
+                    >
+                      <XIcon />
+                    </AttachmentAction>
+                  </AttachmentActions>
+                </Attachment>
+              ))}
+            </AttachmentGroup>
+          )}
+          {preparingImages && (
+            <p role="status" className="text-muted-foreground mb-2 flex items-center gap-2 text-xs">
+              <Spinner /> Preparing images…
+            </p>
           )}
           {imageError && (
-            <p className="text-destructive mb-2 text-xs">{imageError}</p>
+            <p role="status" className="text-destructive mb-2 text-xs">{imageError}</p>
           )}
           <input
             ref={fileRef}
             type="file"
             accept="image/*"
+            multiple
             className="hidden"
             onChange={(e) => {
-              void onPickImage(e.target.files?.[0]);
+              const files = Array.from(e.target.files ?? []);
               e.target.value = "";
+              void onPickImages(files);
             }}
           />
           {approachActive && (
@@ -626,7 +649,7 @@ export function CoachChat({ sessionId }: { sessionId: string | null }) {
                 Approach options active
                 <span className="text-muted-foreground text-xs">
                   {isFirstMessage
-                    ? "Describe the scene, then send"
+                    ? "Describe the scene or attach images"
                     : "Send with or without a message"}
                 </span>
               </span>
@@ -667,11 +690,13 @@ export function CoachChat({ sessionId }: { sessionId: string | null }) {
           <InputGroup>
             <InputGroupAddon align="inline-start" className="py-0 pl-2">
               <ComposerMenu
-                disabled={busy || creating}
+                disabled={composerBusy}
                 approachActive={approachActive}
                 onApproaches={toggleApproaches}
                 onSaveApproach={saveApproach}
-                onAddImage={() => fileRef.current?.click()}
+                onAddImages={() => fileRef.current?.click()}
+                imageLimit={MAX_COMPOSER_IMAGES}
+                imageLimitReached={images.length >= MAX_COMPOSER_IMAGES}
               />
             </InputGroupAddon>
             <InputGroupTextarea
@@ -708,7 +733,7 @@ export function CoachChat({ sessionId }: { sessionId: string | null }) {
                   variant="default"
                   size="icon-sm"
                   aria-label="Send"
-                  disabled={(!situation.trim() && !(approachActive && !isFirstMessage)) || creating}
+                  disabled={composerBusy || !hasSendableDraft}
                   onClick={() => void submit()}
                 >
                   {creating ? <Spinner /> : <SendHorizontalIcon />}
