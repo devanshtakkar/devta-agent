@@ -215,7 +215,6 @@ export function CoachChat({ sessionId }: { sessionId: string | null }) {
   const [imageError, setImageError] = useState<string | undefined>();
   const [approachActive, setApproachActive] = useState(false);
   const [stopped, setStopped] = useState(false);
-  const [creating, setCreating] = useState(false);
   const [modelOverride, setModelOverride] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const nextImageId = useRef(0);
@@ -277,6 +276,8 @@ export function CoachChat({ sessionId }: { sessionId: string | null }) {
       );
     },
   });
+  const createMutation = useMutation({ mutationFn: createSession });
+  const creating = createMutation.isPending;
 
   function pickModel(model: string) {
     setModelOverride(model);
@@ -373,30 +374,27 @@ export function CoachChat({ sessionId }: { sessionId: string | null }) {
     setApproachActive(false);
   }
 
-  async function startNewChat(draft: PendingDraft) {
-    setCreating(true);
-    try {
-      const created = await createSession();
-      queryClient.setQueryData<ChatSessionDetail>(sessionsKeys.detail(created.uuid), {
-        uuid: created.uuid,
-        title: created.title,
-        model: created.model,
-        createdAt: created.createdAt,
-        updatedAt: created.updatedAt,
-        messages: [],
-      });
-      setPendingDraft(draft);
-      clearComposer();
-      void navigate({
-        to: "/s/$sessionId",
-        params: { sessionId: created.uuid },
-        replace: true,
-      });
-    } catch {
-      // Leave the composer intact so the user can retry.
-    } finally {
-      setCreating(false);
-    }
+  function startNewChat(draft: PendingDraft) {
+    // Keep the composer intact if creating the session fails.
+    createMutation.mutate(undefined, {
+      onSuccess: (created) => {
+        queryClient.setQueryData<ChatSessionDetail>(sessionsKeys.detail(created.uuid), {
+          uuid: created.uuid,
+          title: created.title,
+          model: created.model,
+          createdAt: created.createdAt,
+          updatedAt: created.updatedAt,
+          messages: [],
+        });
+        setPendingDraft(draft);
+        clearComposer();
+        void navigate({
+          to: "/s/$sessionId",
+          params: { sessionId: created.uuid },
+          replace: true,
+        });
+      },
+    });
   }
 
   function sendDraft(text: string, intent?: PendingDraft["intent"]) {
@@ -407,7 +405,7 @@ export function CoachChat({ sessionId }: { sessionId: string | null }) {
       model: selectedModel ?? undefined,
     };
     if (sessionId === null) {
-      void startNewChat(draft);
+      startNewChat(draft);
       return;
     }
     clearComposer();
@@ -453,26 +451,16 @@ export function CoachChat({ sessionId }: { sessionId: string | null }) {
   const last = messages[messages.length - 1];
   const showWorking =
     busy && (!last || last.role !== "assistant" || last.parts.length === 0);
-
-  if (sessionId !== null && detailQuery.isPending && messages.length === 0) {
-    return (
-      <div className="mx-auto flex h-full min-h-0 w-full max-w-md flex-1 items-center justify-center">
-        <p className="text-muted-foreground flex items-center gap-2 text-sm">
-          <Spinner /> Loading chat…
-        </p>
-      </div>
+  let composerError: string | undefined;
+  if (status === "error") {
+    const hasImages = messages.some(({ parts }) =>
+      parts.some((part) => part.type === "file" && part.mediaType?.startsWith("image/")),
     );
-  }
-
-  if (sessionId !== null && detailQuery.isError && messages.length === 0) {
-    return (
-      <div className="mx-auto flex h-full min-h-0 w-full max-w-md flex-1 flex-col items-center justify-center gap-3 px-4">
-        <p className="text-sm">Couldn't load this chat.</p>
-        <Button variant="outline" onClick={() => void navigate({ to: "/" })}>
-          Start a new chat
-        </Button>
-      </div>
-    );
+    composerError = chatErrorMessage(error, "send", hasImages);
+  } else if (createMutation.isError) {
+    composerError = chatErrorMessage(createMutation.error, "create");
+  } else if (modelMutation.isError && detailQuery.data?.model !== selectedModel) {
+    composerError = chatErrorMessage(modelMutation.error, "save-model");
   }
 
   return (
@@ -561,17 +549,10 @@ export function CoachChat({ sessionId }: { sessionId: string | null }) {
 
         {/* composer */}
         <div className="border-border bg-background w-full shrink-0 border-t p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-          {status === "error" && (
+          {composerError && (
             <Alert variant="destructive" className="mb-2">
               <TriangleAlertIcon />
-              <AlertDescription>
-                {chatErrorMessage(
-                  error,
-                  messages.some(({ parts }) =>
-                    parts.some((part) => part.type === "file" && part.mediaType?.startsWith("image/")),
-                  ),
-                )}
-              </AlertDescription>
+              <AlertDescription>{composerError}</AlertDescription>
             </Alert>
           )}
           {messages.length === 0 && (
