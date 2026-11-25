@@ -1,4 +1,5 @@
 import { DefaultChatTransport, type UIMessage } from "ai";
+import { fetchChat } from "./chat-errors";
 
 const API_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? "http://localhost:3001";
 
@@ -331,6 +332,7 @@ export function chatTransport(uuid: string) {
   return new DefaultChatTransport<ChatMessage>({
     api: `${API_URL}/api/sessions/${uuid}/chat`,
     credentials: "include",
+    fetch: fetchChat,
     prepareSendMessagesRequest: ({ body, id, messages, trigger, messageId }) => ({
       body: { ...body, id, messages: capChatImages(messages), trigger, messageId },
     }),

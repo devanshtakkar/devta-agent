@@ -36,6 +36,7 @@ import {
   type ConnectionToolPart,
   type Starter,
 } from "@/lib/api";
+import { chatErrorMessage } from "@/lib/chat-errors";
 import {
   setPendingDraft,
   takePendingDraft,
@@ -553,19 +554,6 @@ export function CoachChat({ sessionId }: { sessionId: string | null }) {
                   </Message>
                 </MessageScrollerItem>
               )}
-
-              {status === "error" && (
-                <MessageScrollerItem messageId="error">
-                  <Alert variant="destructive">
-                    <TriangleAlertIcon />
-                    <AlertDescription>
-                      {error?.message
-                        ? "The wingman hit a snag. Retry from your last message."
-                        : "Something went wrong. Retry from your last message."}
-                    </AlertDescription>
-                  </Alert>
-                </MessageScrollerItem>
-              )}
             </MessageScrollerContent>
           </MessageScrollerViewport>
           <MessageScrollerButton />
@@ -573,6 +561,19 @@ export function CoachChat({ sessionId }: { sessionId: string | null }) {
 
         {/* composer */}
         <div className="border-border bg-background w-full shrink-0 border-t p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          {status === "error" && (
+            <Alert variant="destructive" className="mb-2">
+              <TriangleAlertIcon />
+              <AlertDescription>
+                {chatErrorMessage(
+                  error,
+                  messages.some(({ parts }) =>
+                    parts.some((part) => part.type === "file" && part.mediaType?.startsWith("image/")),
+                  ),
+                )}
+              </AlertDescription>
+            </Alert>
+          )}
           {messages.length === 0 && (
             <div className="mb-2 flex gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {QUICK.map((q) => (
