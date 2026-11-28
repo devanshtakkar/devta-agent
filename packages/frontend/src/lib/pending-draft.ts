@@ -1,8 +1,10 @@
 import type { FileUIPart } from "ai";
+import type { ChatMessageMetadata } from "@/lib/api";
 
 export interface PendingDraft {
   text: string;
   files: FileUIPart[];
+  metadata: ChatMessageMetadata;
   intent?: "approaches" | "capture";
   /** Model picked for the first message of the new chat. */
   model?: string;

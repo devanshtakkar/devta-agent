@@ -23,6 +23,7 @@ import {
   connectionHistoryTools,
   withoutConnectionHistory,
 } from "../ai/connection-context.js";
+import { messageTimeSchema, messageTimeline, timestampUserMessages } from "../ai/message-timeline.js";
 import { ChatSession } from "../models/ChatSession.js";
 import { Connection } from "../models/Connection.js";
 
@@ -62,6 +63,7 @@ const chatBodySchema = z.object({
   messages: z.array(uiMessageSchema).min(1, "messages are required"),
   intent: z.enum(["approaches", "branches", "capture"]).optional(),
   model: modelIdSchema.optional(),
+  clientTime: messageTimeSchema.optional().catch(undefined),
 });
 
 const titleSchema = z.object({
@@ -174,86 +176,6 @@ function messageText(message: Pick<StoredMessage, "parts">): string {
     .map((p) => String((p as { text?: unknown }).text ?? ""))
     .join(" ")
     .trim();
-}
-
-function messageMetadata(message: StoredMessage): Record<string, unknown> {
-  return typeof message.metadata === "object" && message.metadata !== null
-    ? (message.metadata as Record<string, unknown>)
-    : {};
-}
-
-/** Human-readable elapsed time between updates, without rounding away long gaps. */
-function elapsedSince(milliseconds: number): string {
-  const minutes = Math.max(0, Math.floor(milliseconds / 60_000));
-  if (minutes < 60) return `${minutes} minute${minutes === 1 ? "" : "s"}`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) {
-    const remaining = minutes % 60;
-    return `${hours} hour${hours === 1 ? "" : "s"}${remaining ? ` ${remaining} minute${remaining === 1 ? "" : "s"}` : ""}`;
-  }
-  const days = Math.floor(hours / 24);
-  if (days < 7) {
-    const remainingHours = hours % 24;
-    return `${days} day${days === 1 ? "" : "s"}${remainingHours ? ` ${remainingHours} hour${remainingHours === 1 ? "" : "s"}` : ""}`;
-  }
-  if (days < 30) {
-    const weeks = Math.floor(days / 7);
-    const remainingDays = days % 7;
-    return `${weeks} week${weeks === 1 ? "" : "s"}${remainingDays ? ` ${remainingDays} day${remainingDays === 1 ? "" : "s"}` : ""}`;
-  }
-  if (days < 365) {
-    const months = Math.floor(days / 30);
-    const remainingDays = days % 30;
-    return `${months} month${months === 1 ? "" : "s"}${remainingDays ? ` ${remainingDays} day${remainingDays === 1 ? "" : "s"}` : ""}`;
-  }
-  const years = Math.floor(days / 365);
-  const remainingDays = days % 365;
-  return `${years} year${years === 1 ? "" : "s"}${remainingDays ? ` ${remainingDays} day${remainingDays === 1 ? "" : "s"}` : ""}`;
-}
-
-/**
- * Timestamp user updates on the server. Existing timestamps are recovered
- * from persisted messages so retries/reloads cannot reset the elapsed time.
- */
-function timestampUserMessages(
-  incoming: StoredMessage[],
-  persisted: StoredMessage[],
-  receivedAt: Date,
-): StoredMessage[] {
-  const timestamps = new Map(
-    persisted
-      .filter((message) => message.role === "user")
-      .map((message) => [message.id, messageMetadata(message).sentAt]),
-  );
-
-  return incoming.map((message) => {
-    if (message.role !== "user") return message;
-    const existing = timestamps.get(message.id);
-    const sentAt = typeof existing === "string" ? existing : receivedAt.toISOString();
-    return {
-      ...message,
-      metadata: { ...messageMetadata(message), sentAt },
-    };
-  });
-}
-
-function messageTimeline(messages: StoredMessage[]): string {
-  const userMessages = messages.filter((message) => message.role === "user").slice(-20);
-  let previousTime: number | undefined;
-  const timeline = userMessages.map((message, index) => {
-    const sentAt = messageMetadata(message).sentAt;
-    if (typeof sentAt !== "string" || !Number.isFinite(Date.parse(sentAt))) {
-      return `- User update ${index + 1}: timestamp unavailable (legacy message).`;
-    }
-    const time = Date.parse(sentAt);
-    const gap =
-      previousTime === undefined
-        ? "first timestamped update"
-        : `${elapsedSince(time - previousTime)} since the previous update`;
-    previousTime = time;
-    return `- User update ${index + 1}: ${new Date(time).toISOString()} (${gap}).`;
-  });
-  return `Current server time: ${new Date().toISOString()}. These timestamps show when the user sent updates.\n${timeline.join("\n")}`;
 }
 
 /**
@@ -539,6 +461,7 @@ router.delete("/:uuid", requireAuth, async (req: Request, res: Response) => {
 });
 
 router.post("/:uuid/chat", requireAuth, async (req: Request, res: Response) => {
+  const receivedAt = new Date();
   const parsedParam = uuidParamSchema.safeParse(req.params);
   if (!parsedParam.success) return res.status(400).json({ error: "Invalid session id" });
   const parsedBody = chatBodySchema.safeParse(req.body);
@@ -556,12 +479,12 @@ router.post("/:uuid/chat", requireAuth, async (req: Request, res: Response) => {
     return res.status(400).json({ error: `Session is full (${MAX_MESSAGES} messages max)` });
   }
 
-  const receivedAt = new Date();
-  const incoming = timestampUserMessages(
+  const timedMessages = timestampUserMessages(
     normalizeMessages(parsedBody.data.messages),
     (session.messages ?? []) as StoredMessage[],
     receivedAt,
-  ) as UIMessage[];
+  );
+  const incoming = timedMessages as UIMessage[];
   const intent = parsedBody.data.intent;
   const isFirstUserMessage = (session.messages?.length ?? 0) === 0;
   // The picker's choice wins; otherwise the session's model, then the default.
@@ -586,9 +509,10 @@ router.post("/:uuid/chat", requireAuth, async (req: Request, res: Response) => {
   try {
     const openrouter = createOpenRouter({ apiKey: env.OPENROUTER_API_KEY });
     const connectionContext = await buildConnectionContext(getUserId(req), session.uuid);
+    const timeline = messageTimeline(timedMessages, receivedAt, parsedBody.data.clientTime);
     const result = streamText({
       model: openrouter(modelId),
-      system: `${SYSTEM_PROMPT}\n\nMessage timeline:\n${messageTimeline(incoming as StoredMessage[])}${connectionContext ? `\n\n${connectionContext}` : ""}`,
+      system: `${SYSTEM_PROMPT}\n\nMessage timeline:\n${timeline}${connectionContext ? `\n\n${connectionContext}` : ""}`,
       tools: { ...chatTools, ...connectionHistoryTools(getUserId(req), session.uuid) },
       // Allow a history lookup and a coaching response, but stop after any UI proposal.
       stopWhen: [

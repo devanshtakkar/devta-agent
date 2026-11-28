@@ -5,9 +5,8 @@ You are working in a new worktree. `packages/backend/.env` and
 `node_modules` is not shared between worktrees. Before running or testing the
 app, follow these steps exactly.
 
-Always use the server's LAN IP in `.env` URLs — never `localhost`,
-`127.0.0.1`, a public IP, or a hostname. Use the same LAN IP consistently in
-frontend/backend environment URLs. Never use the shared cloudflared tunnel
+Always use the server's public IP in frontend/backend `.env` URLs — never
+localhost, a private IP, or a hostname. Never use the shared cloudflared tunnel
 hostnames (e.g. `*.minepicoin.com`) for a worktree. See
 [agent-worktrees.md](agent-worktrees.md) for host-network and worktree guidance.
 
@@ -39,7 +38,7 @@ hostnames (e.g. `*.minepicoin.com`) for a worktree. See
    `OPENROUTER_API_KEY` values from it into `packages/backend/.env`. If the
    file does not exist, ask the user for these two values.
 
-4. Set `$serverHost` to the server's LAN IP. In `packages/backend/.env`, set
+4. Set `$serverHost` to the server's public IP. In `packages/backend/.env`, set
    `PORT` to the port from step 1 and `BETTER_AUTH_URL` to
    `http://<serverHost>:<port>`.
 
@@ -79,7 +78,7 @@ with the port Vite actually prints before starting the backend.
 
 ```powershell
 $keys = "C:\home\kiki\keys\env-variables.txt"
-$serverHost = Read-Host "LAN IP address of this server"
+$serverHost = Read-Host "Public IP address of this server"
 
 pnpm install
 
@@ -109,8 +108,8 @@ Write-Host "Backend :$port. Now run pnpm dev:frontend, read the printed port, an
 
 - Never commit `.env`; it is gitignored.
 - Install deps from the repo root with `pnpm install`, never inside `packages/*`.
-- `.env` URLs must use the server LAN IP, never `localhost`, `127.0.0.1`, a
-  public IP, or a hostname.
+- Frontend/backend `.env` URLs must use the server's public IP, never
+  localhost, a private IP, or a hostname.
 - `FRONTEND_URL` must equal the frontend origin Vite actually serves. If Vite
   bumped to `5174`, use `http://<serverHost>:5174`, not `5173`.
 - Start the backend *after* the frontend so CORS / auth origins are correct.

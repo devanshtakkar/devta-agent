@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeftIcon, CheckIcon, PlusIcon, Trash2Icon } from "lucide-react";
 import { queryClient } from "@/lib/query-client";
 import {
+  getBrowserTimeZone,
   getModelSettings,
   modelsKeys,
   saveModelSettings,
@@ -49,6 +50,7 @@ function SettingsView() {
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState("");
   const [formError, setFormError] = useState<string | undefined>();
+  const timeZone = getBrowserTimeZone();
 
   const settingsQuery = useQuery({
     queryKey: modelsKeys.settings,
@@ -118,9 +120,22 @@ function SettingsView() {
         </h1>
       </header>
 
+      <Card size="sm" className="mb-4 shrink-0">
+        <CardHeader>
+          <CardTitle>Time zone</CardTitle>
+          <CardDescription>
+            Detected automatically from your browser for chat. If it looks
+            wrong, check your device&apos;s time zone settings.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <p className="wrap-anywhere font-medium">{timeZone || "Not detected"}</p>
+        </CardContent>
+      </Card>
+
       {!settings && settingsQuery.isPending && (
         <p className="text-muted-foreground flex items-center gap-2 text-sm">
-          <Spinner /> Loading settings…
+          <Spinner /> Loading model settings…
         </p>
       )}
 
