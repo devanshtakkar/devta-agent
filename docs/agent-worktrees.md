@@ -33,7 +33,21 @@ isolated from other agents and the main checkout.
    print, paste into agent output, or commit secrets. Do not copy `.env` from a
    worktree belonging to another agent unless explicitly authorized.
 
-3. Choose an unused backend port (the default is `5000`) and keep the backend
+3. Give this worktree its own MongoDB database. On the shared server, read the
+   agent connection URI from `/root/.config/mongodb/dev_agent.uri` and set
+   `MONGODB_URI` in `packages/backend/.env`. Do this even if you copied a
+   working backend `.env` from the main checkout.
+
+   Use a unique database name for this worktree, such as
+   `devta_wt_groovy_hedgehog`. Put it in the URI's database path, after the
+   host and before `?` (for example, `.../devta_wt_groovy_hedgehog?...`).
+   Preserve the credentials and query options from the saved URI, including
+   `authSource`. The backend and Better Auth both use the database selected
+   by this URI. MongoDB creates the database on the first write, so agents
+   can start with an empty database without using the admin URI or writing
+   to the main checkout's database.
+
+4. Choose an unused backend port (the default is `5000`) and keep the backend
    settings in sync. Set `PORT` in `packages/backend/.env`, and set
    `BETTER_AUTH_URL` and `VITE_API_URL` to
    `http://<server-lan-ip>:<backend-port>`. Use the server's LAN IP for every
@@ -43,7 +57,7 @@ isolated from other agents and the main checkout.
    update `BETTER_AUTH_URL` and `VITE_API_URL` to the actual port printed by the
    backend, then restart both services so API requests and auth use that port.
 
-4. Start the frontend and note the exact URL/port Vite prints:
+5. Start the frontend and note the exact URL/port Vite prints:
 
    ```sh
    pnpm dev:frontend
@@ -55,7 +69,7 @@ isolated from other agents and the main checkout.
    server LAN IP (for example, `http://<server-lan-ip>:5174`). This is required
    for CORS and auth. Restart affected processes after editing `.env`.
 
-5. In a second terminal, start the backend:
+6. In a second terminal, start the backend:
 
    ```sh
    pnpm dev:backend
@@ -82,9 +96,11 @@ isolated from other agents and the main checkout.
    selected a different port than configured, also correct `BETTER_AUTH_URL`
    and the frontend's `VITE_API_URL`, then restart both services.
 
-6. Test using the local login credentials in `AGENTS.local.md`. If those
-   credentials do not work, ask the user for updated credentials; do not guess
-   or create an account.
+7. Test using the local login credentials in `AGENTS.local.md`. A fresh
+   worktree database does not contain accounts from the main checkout. If
+   those credentials do not work, ask the user for updated credentials or to
+   provision the test account in this database; do not guess or create an
+   account.
 
 ## Host-network access and safety
 
@@ -105,4 +121,6 @@ the Vite config must also permit the hostname used to access the frontend.
 - Stop the dev processes when finished. When reporting test results, include
   the actual frontend/backend ports and any setup limitations, but never include
   secret values.
-- For detailed environment setup notes, see [env-setup.md](env-setup.md).
+- For Windows-specific port and frontend setup, see
+  [env-setup.md](env-setup.md). Use the MongoDB setup above for worktrees on
+  the shared server.
