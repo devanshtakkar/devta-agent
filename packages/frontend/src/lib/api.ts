@@ -13,10 +13,14 @@ export interface ChatMessageMetadata {
 
 export type ChatMessage = UIMessage<ChatMessageMetadata>;
 
+export function getBrowserTimeZone(): string {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone;
+}
+
 export function chatTimestamp() {
   return {
     sentAt: new Date().toISOString(),
-    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    timeZone: getBrowserTimeZone(),
   };
 }
 
