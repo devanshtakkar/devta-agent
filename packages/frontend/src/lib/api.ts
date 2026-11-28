@@ -1,4 +1,8 @@
 import { DefaultChatTransport, type UIMessage } from "ai";
+import { ApiError, fetchApi, readApiError } from "./api-error";
+import { fetchChat } from "./chat-errors";
+
+export { ApiError };
 
 const API_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? "http://localhost:3001";
 
@@ -307,34 +311,13 @@ export const modelsKeys = {
   settings: ["models", "settings"] as const,
 };
 
-export class ApiError extends Error {
-  status: number;
-  body: unknown;
-
-  constructor(status: number, body: unknown, message: string) {
-    super(message);
-    this.name = "ApiError";
-    this.status = status;
-    this.body = body;
-  }
-}
-
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_URL}${path}`, {
+  const res = await fetchApi(`${API_URL}${path}`, {
     credentials: "include",
     headers: { "Content-Type": "application/json" },
     ...init,
   });
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    let body: unknown = text;
-    try {
-      body = text ? JSON.parse(text) : undefined;
-    } catch {
-      // Non-JSON error body; keep the raw text.
-    }
-    throw new ApiError(res.status, body, text || `Request failed: ${res.status}`);
-  }
+  if (!res.ok) throw await readApiError(res);
   if (res.status === 204) return undefined as T;
   return (await res.json()) as T;
 }
@@ -344,6 +327,7 @@ export function chatTransport(uuid: string) {
   return new DefaultChatTransport<ChatMessage>({
     api: `${API_URL}/api/sessions/${uuid}/chat`,
     credentials: "include",
+    fetch: fetchChat,
     prepareSendMessagesRequest: ({ body, id, messages, trigger, messageId }) => ({
       body: {
         ...body,
