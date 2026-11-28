@@ -44,11 +44,16 @@ engaged → married (terminal: failed / ghosted).
 
 ## Rules
 
-0. Before running or testing in any checkout (including the main checkout and all worktrees), read [docs/agent-worktrees.md](docs/agent-worktrees.md) for environment setup, host-network access, port selection, and secret-handling rules. For all development and testing, bind frontend/backend servers to `0.0.0.0` and use the server's LAN IP with the actual ports for frontend/backend URLs, including `BETTER_AUTH_URL`, `VITE_API_URL`, and `FRONTEND_URL` — never `localhost`, `127.0.0.1`, a public IP, or a hostname. Do not expose development servers publicly.
+0. Before running or testing, read [docs/agent-worktrees.md](docs/agent-worktrees.md)
+   for environment setup, port selection, and secret handling. Bind both dev
+   servers to `0.0.0.0` on the host and always use the server's public IP and
+   actual ports for `BETTER_AUTH_URL`, `VITE_API_URL`, `FRONTEND_URL`, and the
+   URLs shared with the user. Do not use localhost, private IPs, or tunnels.
 1. Never `git add packages/frontend` / `git add packages/backend` as gitlinks — they are plain
    directories in this monorepo (no nested `.git`). If `git status` ever shows them as a gitlink,
    a nested `.git` crept back in — delete it, do not commit the gitlink.
-2. Commit all frontend/backend work from root in this repo (branch `main`, remote `devta-agent`).
+2. Commit work from the repository root on the current worktree branch. Only
+   make changes on `main` when the user explicitly asks.
 3. When testing the app, use the login credentials in `AGENTS.local.md` (gitignored, never
    commit it). If those credentials do not work, ask the user for updated ones — do not guess
    or create a new account.
