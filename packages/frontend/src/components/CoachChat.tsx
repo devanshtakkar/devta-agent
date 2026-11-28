@@ -16,6 +16,7 @@ import {
   XIcon,
 } from "lucide-react";
 import {
+  chatTimestamp,
   chatTransport,
   connectionsKeys,
   createSession,
@@ -94,8 +95,8 @@ function imagePart(dataUrl: string): FileUIPart {
   return { type: "file", mediaType, url: dataUrl, filename: `image.${ext}` };
 }
 
-function draftMessage({ text, files }: PendingDraft) {
-  return text ? { text, files } : { files };
+function draftMessage({ text, files, metadata }: PendingDraft) {
+  return text ? { text, files, metadata } : { files, metadata };
 }
 
 function stageVariant(stage: ConnectionStage) {
@@ -402,6 +403,7 @@ export function CoachChat({ sessionId }: { sessionId: string | null }) {
     const draft: PendingDraft = {
       text,
       files: images.map(({ part }) => part),
+      metadata: chatTimestamp(),
       intent,
       model: selectedModel ?? undefined,
     };
@@ -444,6 +446,7 @@ export function CoachChat({ sessionId }: { sessionId: string | null }) {
     void sendMessage(
       {
         text: `I'm about to open with: “${starter.openerLine}”. Brainstorm how this conversation could branch out — give me a couple of scenarios so I'm prepared for however she reacts.`,
+        metadata: chatTimestamp(),
       },
       requestOptions("branches"),
     );

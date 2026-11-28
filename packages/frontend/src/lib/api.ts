@@ -2,14 +2,23 @@ import { DefaultChatTransport, type UIMessage } from "ai";
 
 const API_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? "http://localhost:3001";
 
-/** Metadata the API attaches to chat messages. */
+/** Metadata carried by chat messages. */
 export interface ChatMessageMetadata {
   model?: string;
-  /** Server-recorded time this user update was received. */
+  /** Send time as a UTC instant; older messages may use server receipt time. */
   sentAt?: string;
+  /** Browser time zone at send time. */
+  timeZone?: string;
 }
 
 export type ChatMessage = UIMessage<ChatMessageMetadata>;
+
+export function chatTimestamp() {
+  return {
+    sentAt: new Date().toISOString(),
+    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+  };
+}
 
 /** Model that generated an assistant message, when the API reported one. */
 export function messageModel(message: ChatMessage): string | undefined {
@@ -332,7 +341,14 @@ export function chatTransport(uuid: string) {
     api: `${API_URL}/api/sessions/${uuid}/chat`,
     credentials: "include",
     prepareSendMessagesRequest: ({ body, id, messages, trigger, messageId }) => ({
-      body: { ...body, id, messages: capChatImages(messages), trigger, messageId },
+      body: {
+        ...body,
+        id,
+        messages: capChatImages(messages),
+        trigger,
+        messageId,
+        clientTime: chatTimestamp(),
+      },
     }),
   });
 }
